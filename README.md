@@ -28,6 +28,11 @@ Cible : ~5 personnes, usage interne, sans création de compte (juste un pseudo).
 ### Étape 3 ✅ — média par proximité (LiveKit)
 - Token d'accès généré **côté serveur** (`GET /token`) avec `livekit-server-sdk` ;
   la clé secrète ne quitte jamais le serveur. Front et serveur partagent une room unique.
+- **Connexion paresseuse (économie de minutes)** : on ne rejoint la room LiveKit
+  que lorsqu'au moins une personne est **à portée**, et on la quitte (après un court
+  délai de grâce) dès qu'on se retrouve seul. Seul dans son coin = **0 minute
+  consommée**, et la caméra s'éteint physiquement. Le HUD indique l'état (`💤 en veille`
+  / `🎥 actif`).
 - Connexion LiveKit avec `autoSubscribe: false` : on publie son micro + sa caméra,
   mais on ne **souscrit** qu'aux participants **proches** (piloté par la proximité).
   Quand on s'éloigne → désabonnement automatique (bande passante préservée).

@@ -5,6 +5,9 @@ import { LiveKitMedia } from '../media.js';
 
 const WALL = 24; // épaisseur des murs du périmètre
 const SEND_INTERVAL = 60; // ms entre deux envois de position au serveur
+// Délai avant de quitter la room LiveKit une fois seul (évite les coupures
+// si on ne fait que frôler la limite de proximité). Économise des minutes.
+const MEDIA_GRACE_MS = 5000;
 
 // Mobilier de l'open-space (rectangles bloquants + déco non bloquante).
 const FURNITURE = [
@@ -45,9 +48,12 @@ export default class GameScene extends Phaser.Scene {
     this.lastSent = { x: 0, y: 0 };
     this.lastSentAt = 0;
 
-    // Média (LiveKit) — initialisé une fois connecté au signaling
+    // Média (LiveKit) — connexion paresseuse : on ne rejoint la room
+    // que lorsqu'au moins un participant est à portée (économie de minutes).
     this.media = null;
     this.mediaStarted = false;
+    this.mediaToken = null; // { url, token } récupéré une fois, réutilisé
+    this.mediaDisconnectTimer = null;
   }
 
   create() {
@@ -70,6 +76,7 @@ export default class GameScene extends Phaser.Scene {
 
     // Coupe proprement les connexions quand la scène s'arrête.
     this.events.once('shutdown', () => {
+      this.cancelMediaDisconnect();
       this.media?.disconnect();
       this.socket?.disconnect();
     });
@@ -279,8 +286,9 @@ export default class GameScene extends Phaser.Scene {
     this.socket.on('player-left', ({ id }) => this.removeRemote(id));
   }
 
-  // Récupère un token et connecte la couche média LiveKit (une seule fois).
-  // Si LiveKit n'est pas configuré côté serveur, on reste en « positions seules ».
+  // Prépare la couche média : récupère le token (n'utilise PAS de minutes,
+  // c'est juste un appel HTTP), mais ne rejoint pas encore la room LiveKit.
+  // La connexion réelle est paresseuse (voir ensureMediaConnected).
   startMedia() {
     if (this.mediaStarted) return;
     this.mediaStarted = true;
@@ -289,18 +297,47 @@ export default class GameScene extends Phaser.Scene {
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error('token indisponible'))))
       .then(({ token, url }) => {
         this.media = new LiveKitMedia();
-        return this.media.connect(url, token, this.pseudo);
-      })
-      .then(() => {
-        // Souscrit aux participants déjà à portée au moment de la connexion média.
-        this.others.forEach((o) => {
-          if (o.type === 'remote' && o.inRange) this.media.subscribeTo(o.id);
-        });
+        this.mediaToken = { url, token };
+        // Si quelqu'un est déjà à portée à l'arrivée, on se connecte tout de suite.
+        if (this.nearbyRemoteCount() > 0) this.ensureMediaConnected();
       })
       .catch((e) => {
         console.info('[media] désactivé :', e?.message || e);
         this.media = null;
       });
+  }
+
+  // Nombre de participants réseau actuellement dans la bulle de proximité.
+  nearbyRemoteCount() {
+    let n = 0;
+    this.others.forEach((o) => {
+      if (o.type === 'remote' && o.inRange) n += 1;
+    });
+    return n;
+  }
+
+  // Rejoint la room LiveKit si ce n'est pas déjà fait (déclenché par la proximité).
+  ensureMediaConnected() {
+    if (!this.media || !this.mediaToken) return;
+    if (this.media.connected || this.media.connecting) return;
+    this.cancelMediaDisconnect();
+    this.media
+      .connect(this.mediaToken.url, this.mediaToken.token, this.pseudo)
+      .catch((e) => console.info('[media] connexion impossible :', e?.message || e));
+  }
+
+  // Programme la sortie de la room après un délai de grâce, si on reste seul.
+  scheduleMediaDisconnect() {
+    if (!this.media || this.mediaDisconnectTimer) return;
+    this.mediaDisconnectTimer = this.time.delayedCall(MEDIA_GRACE_MS, () => {
+      this.mediaDisconnectTimer = null;
+      if (this.nearbyRemoteCount() === 0) this.media?.disconnect();
+    });
+  }
+
+  cancelMediaDisconnect() {
+    this.mediaDisconnectTimer?.remove();
+    this.mediaDisconnectTimer = null;
   }
 
   addRemote(p) {
@@ -327,6 +364,8 @@ export default class GameScene extends Phaser.Scene {
     o.container.destroy();
     this.others.delete(id);
     this.nearby = this.nearby.filter((n) => n !== o.name);
+    // S'il partait et qu'on se retrouve seul, on programme la sortie de la room.
+    if (this.nearbyRemoteCount() === 0) this.scheduleMediaDisconnect();
   }
 
   // ---------------------------------------------------------------- entrées
@@ -490,24 +529,36 @@ export default class GameScene extends Phaser.Scene {
     o.inRange = true;
     o.circle.setFillStyle(COLORS.botActive);
     this.tweens.add({ targets: o.container, scale: 1.12, duration: 160, ease: 'Back.out' });
-    // Souscrit aux flux audio/vidéo du participant proche (les bots sont ignorés).
-    if (o.type === 'remote') this.media?.subscribeTo(o.id);
+    // Participant proche : on rejoint la room (si pas déjà fait) et on s'y abonne.
+    if (o.type === 'remote') {
+      this.media?.subscribeTo(o.id);
+      this.ensureMediaConnected();
+    }
   }
 
   onLeaveRange(o) {
     o.inRange = false;
     o.circle.setFillStyle(o.baseColor);
     this.tweens.add({ targets: o.container, scale: 1, duration: 160, ease: 'Sine.out' });
-    // Se désabonne quand on s'éloigne (ne pas surcharger la bande passante).
-    if (o.type === 'remote') this.media?.unsubscribeFrom(o.id);
+    if (o.type === 'remote') {
+      this.media?.unsubscribeFrom(o.id);
+      // Plus personne à portée → on quitte la room après le délai de grâce.
+      if (this.nearbyRemoteCount() === 0) this.scheduleMediaDisconnect();
+    }
   }
 
   updateHud() {
     const remotes = [...this.others.values()].filter((o) => o.type === 'remote').length;
     const net = this.online ? `🟢 connecté · ${remotes + 1} en ligne` : '🔴 hors-ligne (solo)';
+    const media = !this.mediaToken
+      ? 'positions seules'
+      : this.media?.connected
+        ? '🎥 actif (consomme des minutes)'
+        : '💤 en veille (0 minute)';
     this.hud.setText(
       [
         `Pseudo : ${this.pseudo}    ${net}`,
+        `Média : ${media}`,
         `Rayon de proximité : ${this.proximityRadius} px   ([ / ] pour régler)`,
         `Bulle visible : ${this.showBubble ? 'oui' : 'non'}   (P pour basculer)`,
         `Déplacement : flèches ou ZQSD`,

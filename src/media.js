@@ -13,6 +13,7 @@ export class LiveKitMedia {
   constructor() {
     this.room = null;
     this.connected = false;
+    this.connecting = false;
     this.nearby = new Set(); // identités proches (à garder souscrites)
     this.tileMap = new Map(); // tileId -> { tile, video }
     this.audioMap = new Map(); // track.sid -> element
@@ -26,6 +27,8 @@ export class LiveKitMedia {
   }
 
   async connect(url, token, pseudo) {
+    if (this.connected || this.connecting) return;
+    this.connecting = true;
     this.pseudo = pseudo;
     this.room = new Room({ adaptiveStream: true, dynacast: true });
 
@@ -46,8 +49,15 @@ export class LiveKitMedia {
         this.connected = false;
       });
 
-    await this.room.connect(url, token, { autoSubscribe: false });
+    try {
+      await this.room.connect(url, token, { autoSubscribe: false });
+    } catch (e) {
+      this.connecting = false;
+      this.room = null;
+      throw e;
+    }
     this.connected = true;
+    this.connecting = false;
     this.layer.classList.remove('hidden');
 
     // Publie micro + caméra par défaut (la 1re fois déclenche la demande de permission).
@@ -58,6 +68,12 @@ export class LiveKitMedia {
       console.warn('[media] micro/caméra indisponibles :', e?.message || e);
     }
     this.refreshControls();
+
+    // Souscrit aux participants déjà désirés (proximité enregistrée avant la connexion).
+    this.nearby.forEach((id) => {
+      const p = this.room.remoteParticipants.get(id);
+      if (p) p.trackPublications.forEach((pub) => pub.setSubscribed(true));
+    });
   }
 
   // ----- Proximité : on (dé)souscrit aux flux des avatars proches -----
@@ -241,8 +257,17 @@ export class LiveKitMedia {
     this.btnScreen?.classList.toggle('active', lp.isScreenShareEnabled);
   }
 
+  // Quitte la room LiveKit (stop la consommation de minutes) et nettoie l'UI.
+  // Garde l'instance réutilisable : une nouvelle proximité reconnectera.
   disconnect() {
+    this.minimizeScreens();
+    [...this.tileMap.keys()].forEach((id) => this.removeTile(id));
+    this.audioMap.forEach((el) => el.remove());
+    this.audioMap.clear();
     this.room?.disconnect();
+    this.room = null;
     this.connected = false;
+    this.connecting = false;
+    this.layer?.classList.add('hidden');
   }
 }
