@@ -8,12 +8,22 @@ Cible : ~5 personnes, usage interne, sans création de compte (juste un pseudo).
 
 ## État actuel
 
-### Étape 1 ✅ — prototype solo (feeling spatial)
-- Carte 2D vue de dessus (open-space : bureaux, table de réunion, coin café, plantes).
+### Étape 1 ✅ — prototype spatial
+- Carte 2D vue de dessus structurée en **zones** : open-space (bureaux, chaises,
+  écrans), salle de **réunion** fermée (cloisons + porte), coin **café** (comptoir,
+  machine, ☕ 🍩), zone **détente** (canapé, bibliothèque, 🎸, 🐈), étang à canards 🦆,
+  table de ping-pong 🏓, et quelques clins d'œil (🚧 🛹).
 - Avatar déplaçable au clavier : **flèches** et **ZQSD**, collisions murs + mobilier.
-- 3 « collègues » statiques (PNJ) : Léa, Karim, Sophie.
 - **Détection de proximité avec retour visuel** : halo + changement de couleur +
   lien « en conversation » quand on entre dans la bulle d'un autre avatar.
+
+### Personnalisation de l'avatar 🎨
+À l'entrée, chacun choisit (avec aperçu en direct) :
+- sa **couleur** (palette de 7) ;
+- son **accessoire** : casquette 🧢, haut-de-forme 🎩 ou chapeau de fête 🥳 ;
+- son **compagnon** : un petit chien 🐶 qui trottine derrière l'avatar.
+La personnalisation est synchronisée : les autres voient ta couleur, ton chapeau
+et ton chien. L'avatar garde sa bouille ronde avec ses petits yeux directionnels.
 
 ### Étape 2 ✅ — multijoueur positions
 - Serveur **Node + Express + Socket.io** (`server/index.js`), état **en mémoire**

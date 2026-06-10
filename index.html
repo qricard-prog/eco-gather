@@ -70,7 +70,52 @@
         text-align: left;
         font-size: 13px;
         color: var(--muted);
-        margin-bottom: 6px;
+        margin: 14px 0 6px;
+      }
+      #preview {
+        display: block;
+        margin: 0 auto 4px;
+        background: radial-gradient(circle at 50% 40%, #18242f, #0d141c 75%);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+      }
+      .swatches {
+        display: flex;
+        gap: 10px;
+        justify-content: flex-start;
+      }
+      .swatch {
+        width: 30px;
+        height: 30px;
+        border-radius: 50%;
+        border: 3px solid transparent;
+        cursor: pointer;
+        padding: 0;
+      }
+      .swatch.sel {
+        border-color: #fff;
+        transform: scale(1.12);
+      }
+      .chips {
+        display: flex;
+        gap: 6px;
+        flex-wrap: wrap;
+      }
+      .chip {
+        padding: 7px 11px;
+        border-radius: 999px;
+        border: 1px solid var(--border);
+        background: #0d141c;
+        color: var(--text);
+        font-size: 13px;
+        cursor: pointer;
+      }
+      .chip:hover { border-color: var(--accent); }
+      .chip.sel {
+        background: var(--accent);
+        color: #06231a;
+        border-color: var(--accent);
+        font-weight: 600;
       }
       .card input {
         width: 100%;
@@ -83,8 +128,8 @@
         outline: none;
       }
       .card input:focus { border-color: var(--accent); }
-      .card button {
-        margin-top: 18px;
+      #enter {
+        margin-top: 22px;
         width: 100%;
         padding: 12px 14px;
         font-size: 16px;
@@ -95,7 +140,7 @@
         color: #06231a;
         cursor: pointer;
       }
-      .card button:hover { filter: brightness(1.08); }
+      #enter:hover { filter: brightness(1.08); }
       .card .hint {
         margin-top: 18px;
         font-size: 12px;
@@ -211,8 +256,28 @@
       <div class="card">
         <h1>🌿 Eco-Gather</h1>
         <p class="sub">Espace virtuel collaboratif — audio/vidéo par proximité</p>
+
+        <canvas id="preview" width="200" height="130" aria-label="Aperçu de ton avatar"></canvas>
+
         <label for="pseudo">Ton pseudo</label>
         <input id="pseudo" type="text" maxlength="16" placeholder="Ex : Quentin" autocomplete="off" />
+
+        <label>Ta couleur</label>
+        <div id="swatches" class="swatches"></div>
+
+        <label>Ton accessoire</label>
+        <div id="hats" class="chips">
+          <button class="chip sel" data-hat="none">Aucun</button>
+          <button class="chip" data-hat="casquette">🧢 Casquette</button>
+          <button class="chip" data-hat="hautdeforme">🎩 Haut-de-forme</button>
+          <button class="chip" data-hat="fete">🥳 Fête</button>
+        </div>
+
+        <label>Ton compagnon</label>
+        <div class="chips">
+          <button id="dog-toggle" class="chip">🐶 Un petit chien me suit</button>
+        </div>
+
         <button id="enter">Entrer dans l'espace</button>
         <p class="hint">
           Déplacement : <kbd>↑</kbd> <kbd>↓</kbd> <kbd>←</kbd> <kbd>→</kbd> ou <kbd>Z</kbd> <kbd>Q</kbd> <kbd>S</kbd> <kbd>D</kbd><br />

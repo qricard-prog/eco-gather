@@ -74,11 +74,12 @@ const io = new Server(httpServer, {
   cors: { origin: '*' }, // POC : front et serveur sur des origines différentes en prod
 });
 
-// socketId -> { id, pseudo, x, y, dir, color }
+// socketId -> { id, pseudo, x, y, dir, color, hat, dog }
 const players = new Map();
 
-// Palette assignée aux participants (distincte, lisible sur fond sombre).
+// Palette de secours si le client n'envoie pas de couleur valide.
 const PALETTE = [0x36c98f, 0x5b8def, 0xf2c14e, 0xe06b8f, 0xb06bd6, 0x4fd6c8, 0xf08a4b];
+const HATS = ['none', 'casquette', 'hautdeforme', 'fete'];
 let colorCursor = 0;
 function nextColor() {
   const c = PALETTE[colorCursor % PALETTE.length];
@@ -86,16 +87,16 @@ function nextColor() {
   return c;
 }
 
-// Point d'apparition aléatoire dans la zone centrale (évite les murs).
+// Point d'apparition aléatoire dans l'allée centrale (zone dégagée du décor).
 function spawnPoint() {
   return {
-    x: Math.round(300 + Math.random() * 1000),
-    y: Math.round(250 + Math.random() * 500),
+    x: Math.round(580 + Math.random() * 400),
+    y: Math.round(600 + Math.random() * 90),
   };
 }
 
 io.on('connection', (socket) => {
-  socket.on('join', ({ pseudo } = {}) => {
+  socket.on('join', ({ pseudo, color, hat, dog } = {}) => {
     const { x, y } = spawnPoint();
     const player = {
       id: socket.id,
@@ -103,7 +104,10 @@ io.on('connection', (socket) => {
       x,
       y,
       dir: { x: 0, y: 1 },
-      color: nextColor(),
+      // Personnalisation choisie à l'entrée (validée côté serveur).
+      color: Number.isInteger(color) && color >= 0 && color <= 0xffffff ? color : nextColor(),
+      hat: HATS.includes(hat) ? hat : 'none',
+      dog: Boolean(dog),
     };
     players.set(socket.id, player);
 
