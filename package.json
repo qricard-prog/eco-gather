@@ -1,0 +1,27 @@
+{
+  "name": "eco-gather",
+  "private": true,
+  "version": "0.2.0",
+  "type": "module",
+  "description": "POC espace virtuel collaboratif type Gather (Ecomaison) — Étape 2 : multijoueur positions",
+  "scripts": {
+    "dev": "concurrently -k -n web,srv -c green,blue \"vite\" \"PORT=3001 node --watch server/index.js\"",
+    "dev:web": "vite",
+    "dev:server": "PORT=3001 node --watch server/index.js",
+    "build": "vite build",
+    "start": "node server/index.js",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "express": "^4.21.2",
+    "livekit-client": "^2.19.2",
+    "livekit-server-sdk": "^2.15.4",
+    "phaser": "^3.88.2",
+    "socket.io": "^4.8.1",
+    "socket.io-client": "^4.8.1"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2",
+    "vite": "^6.3.5"
+  }
+}

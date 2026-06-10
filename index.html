@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Eco-Gather — POC espace virtuel</title>
+    <style>
+      :root {
+        --bg: #0f1419;
+        --panel: rgba(20, 28, 38, 0.92);
+        --border: #2a3a4d;
+        --text: #e6edf3;
+        --muted: #8a9bb0;
+        --accent: #36c98f;
+      }
+      * { box-sizing: border-box; }
+      html, body {
+        margin: 0;
+        height: 100%;
+        background: var(--bg);
+        color: var(--text);
+        font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+        overflow: hidden;
+      }
+      #app {
+        width: 100vw;
+        height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      #app canvas {
+        display: block;
+        max-width: 100%;
+        max-height: 100%;
+      }
+
+      /* --- Écran d'accueil (saisie du pseudo) --- */
+      #intro {
+        position: fixed;
+        inset: 0;
+        z-index: 10;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: radial-gradient(circle at 50% 30%, #16202c, #0a0e13 70%);
+      }
+      #intro.hidden { display: none; }
+      .card {
+        width: min(420px, 90vw);
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-radius: 16px;
+        padding: 32px 28px;
+        text-align: center;
+        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+      }
+      .card h1 {
+        margin: 0 0 4px;
+        font-size: 26px;
+        letter-spacing: -0.5px;
+      }
+      .card .sub {
+        margin: 0 0 24px;
+        color: var(--muted);
+        font-size: 14px;
+      }
+      .card label {
+        display: block;
+        text-align: left;
+        font-size: 13px;
+        color: var(--muted);
+        margin-bottom: 6px;
+      }
+      .card input {
+        width: 100%;
+        padding: 12px 14px;
+        font-size: 16px;
+        border-radius: 10px;
+        border: 1px solid var(--border);
+        background: #0d141c;
+        color: var(--text);
+        outline: none;
+      }
+      .card input:focus { border-color: var(--accent); }
+      .card button {
+        margin-top: 18px;
+        width: 100%;
+        padding: 12px 14px;
+        font-size: 16px;
+        font-weight: 600;
+        border: none;
+        border-radius: 10px;
+        background: var(--accent);
+        color: #06231a;
+        cursor: pointer;
+      }
+      .card button:hover { filter: brightness(1.08); }
+      .card .hint {
+        margin-top: 18px;
+        font-size: 12px;
+        color: var(--muted);
+        line-height: 1.5;
+      }
+      kbd {
+        background: #0d141c;
+        border: 1px solid var(--border);
+        border-bottom-width: 2px;
+        border-radius: 5px;
+        padding: 1px 6px;
+        font-size: 11px;
+        font-family: ui-monospace, monospace;
+      }
+
+      /* --- Couche média (vignettes vidéo + contrôles) --- */
+      #media.hidden { display: none; }
+      #tiles {
+        position: fixed;
+        top: 12px;
+        right: 12px;
+        z-index: 31; /* au-dessus du backdrop (30) pour que l'écran agrandi reste lumineux */
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        justify-content: flex-end;
+        max-width: 60vw;
+        pointer-events: none;
+      }
+      .tile {
+        position: relative;
+        width: 180px;
+        height: 120px;
+        border-radius: 10px;
+        overflow: hidden;
+        background: #06090d;
+        border: 2px solid var(--border);
+        box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45);
+        pointer-events: auto;
+      }
+      .tile.screen { width: 320px; height: 200px; cursor: zoom-in; }
+      .tile.self { border-color: var(--accent); }
+      .tile.speaking { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent); }
+      /* Partage d'écran agrandi au centre de l'écran */
+      .tile.screen.maximized {
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        width: min(92vw, 1400px);
+        height: min(82vh, 820px);
+        z-index: 40;
+        cursor: zoom-out;
+        border-color: var(--accent);
+      }
+      #screen-backdrop {
+        position: fixed;
+        inset: 0;
+        z-index: 30; /* sous #tiles (31) : assombrit le jeu, pas la vidéo agrandie */
+        background: rgba(0, 0, 0, 0.72);
+        pointer-events: auto;
+      }
+      #screen-backdrop.hidden { display: none; }
+      .tile video {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        background: #06090d;
+      }
+      .tile.screen video { object-fit: contain; }
+      .tile-name {
+        position: absolute;
+        left: 6px;
+        bottom: 6px;
+        font-size: 11px;
+        padding: 2px 6px;
+        border-radius: 6px;
+        background: rgba(0, 0, 0, 0.6);
+        color: #fff;
+      }
+      #controls {
+        position: fixed;
+        bottom: 16px;
+        left: 50%;
+        transform: translateX(-50%);
+        z-index: 32; /* toujours au-dessus du backdrop et de l'écran agrandi */
+        display: flex;
+        gap: 8px;
+        padding: 8px;
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-radius: 999px;
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+      }
+      #controls button {
+        border: 1px solid var(--border);
+        background: #131c26;
+        color: var(--text);
+        font-size: 15px;
+        padding: 8px 14px;
+        border-radius: 999px;
+        cursor: pointer;
+      }
+      #controls button:hover { background: #1b2734; }
+      #controls button.off { background: #4a1f1f; border-color: #7a2e2e; }
+      #controls button.active { background: var(--accent); color: #06231a; border-color: var(--accent); }
+      #audio-sink { display: none; }
+    </style>
+  </head>
+  <body>
+    <div id="intro">
+      <div class="card">
+        <h1>🌿 Eco-Gather</h1>
+        <p class="sub">Espace virtuel collaboratif — audio/vidéo par proximité</p>
+        <label for="pseudo">Ton pseudo</label>
+        <input id="pseudo" type="text" maxlength="16" placeholder="Ex : Quentin" autocomplete="off" />
+        <button id="enter">Entrer dans l'espace</button>
+        <p class="hint">
+          Déplacement : <kbd>↑</kbd> <kbd>↓</kbd> <kbd>←</kbd> <kbd>→</kbd> ou <kbd>Z</kbd> <kbd>Q</kbd> <kbd>S</kbd> <kbd>D</kbd><br />
+          Approche-toi des collègues pour « entrer en conversation ».
+        </p>
+      </div>
+    </div>
+    <div id="app"></div>
+
+    <!-- Couche média LiveKit : vignettes vidéo + barre de contrôles -->
+    <div id="media" class="hidden">
+      <div id="screen-backdrop" class="hidden"></div>
+      <div id="tiles"></div>
+      <div id="controls">
+        <button id="btn-mic" title="Micro">🎤</button>
+        <button id="btn-cam" title="Caméra">🎥</button>
+        <button id="btn-screen" title="Partager l'écran">🖥️ Partager</button>
+      </div>
+      <div id="audio-sink"></div>
+    </div>
+
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>

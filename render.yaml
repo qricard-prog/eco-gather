@@ -1,0 +1,18 @@
+# Blueprint Render — déploiement mono-service gratuit.
+# Le serveur Node sert le front compilé + le signaling Socket.io + les tokens LiveKit.
+# Render fournit PORT automatiquement et le HTTPS.
+services:
+  - type: web
+    name: eco-gather
+    runtime: node
+    plan: free
+    buildCommand: npm install && npm run build
+    startCommand: node server/index.js
+    envVars:
+      # Clés LiveKit : à renseigner dans le dashboard Render (jamais commitées).
+      - key: LIVEKIT_URL
+        sync: false
+      - key: LIVEKIT_API_KEY
+        sync: false
+      - key: LIVEKIT_API_SECRET
+        sync: false
