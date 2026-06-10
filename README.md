@@ -49,6 +49,10 @@ et ton chien. L'avatar garde sa bouille ronde avec ses petits yeux directionnels
 - Identité LiveKit = id Socket.io → la proximité « jeu » pilote directement le média.
 - Vignettes vidéo des personnes proches + self-view, indicateur de personne qui parle.
 - Barre de contrôles : 🎤 micro, 🎥 caméra, 🖥️ partage d'écran.
+- **Choix de la source** : deux sélecteurs dans la barre permettent de changer de
+  micro / caméra **à chaud** (sans se déconnecter) ; le choix est mémorisé pour
+  les prochaines visites (`localStorage`). Les listes se mettent à jour quand on
+  branche/débranche un périphérique.
 - **Partage d'écran agrandissable** : cliquer sur la vignette du partage l'affiche
   en grand au centre (re-clic ou clic sur le fond pour réduire).
 - **Dégradation propre** : sans clés LiveKit, l'app tourne en « positions seules ».

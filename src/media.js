@@ -68,6 +68,9 @@ export class LiveKitMedia {
       console.warn('[media] micro/caméra indisponibles :', e?.message || e);
     }
     this.refreshControls();
+    // Réapplique les sources choisies la dernière fois, puis remplit les sélecteurs.
+    await this.restoreDevicePrefs();
+    await this.refreshDevices();
 
     // Souscrit aux participants déjà désirés (proximité enregistrée avant la connexion).
     this.nearby.forEach((id) => {
@@ -216,10 +219,83 @@ export class LiveKitMedia {
     this.btnMic = document.getElementById('btn-mic');
     this.btnCam = document.getElementById('btn-cam');
     this.btnScreen = document.getElementById('btn-screen');
+    this.micSelect = document.getElementById('mic-select');
+    this.camSelect = document.getElementById('cam-select');
 
     this.btnMic?.addEventListener('click', () => this.toggleMic());
     this.btnCam?.addEventListener('click', () => this.toggleCam());
     this.btnScreen?.addEventListener('click', () => this.toggleScreen());
+    this.micSelect?.addEventListener('change', () =>
+      this.switchDevice('audioinput', this.micSelect.value)
+    );
+    this.camSelect?.addEventListener('change', () =>
+      this.switchDevice('videoinput', this.camSelect.value)
+    );
+    // Brancher/débrancher un casque ou une webcam met à jour les listes.
+    navigator.mediaDevices?.addEventListener?.('devicechange', () => this.refreshDevices());
+  }
+
+  // ----- Choix de la source micro / caméra -----
+
+  // Remplit les sélecteurs avec les périphériques disponibles (les libellés ne
+  // sont accessibles qu'une fois la permission micro/caméra accordée).
+  async refreshDevices() {
+    if (!this.connected) return;
+    try {
+      const [mics, cams] = await Promise.all([
+        Room.getLocalDevices('audioinput', false),
+        Room.getLocalDevices('videoinput', false),
+      ]);
+      this.fillDeviceSelect(this.micSelect, mics, this.room.getActiveDevice('audioinput'));
+      this.fillDeviceSelect(this.camSelect, cams, this.room.getActiveDevice('videoinput'));
+    } catch (e) {
+      console.info('[media] énumération périphériques impossible :', e?.message || e);
+    }
+  }
+
+  fillDeviceSelect(select, devices, activeId) {
+    if (!select) return;
+    select.innerHTML = '';
+    devices
+      .filter((d) => d.deviceId)
+      .forEach((d, i) => {
+        const opt = document.createElement('option');
+        opt.value = d.deviceId;
+        opt.textContent = d.label || `Périphérique ${i + 1}`;
+        if (d.deviceId === activeId) opt.selected = true;
+        select.appendChild(opt);
+      });
+  }
+
+  // Bascule à chaud vers un autre micro / caméra (sans se déconnecter),
+  // et mémorise le choix pour les prochaines visites.
+  async switchDevice(kind, deviceId) {
+    if (!this.connected || !deviceId) return;
+    try {
+      await this.room.switchActiveDevice(kind, deviceId);
+      localStorage.setItem(kind === 'audioinput' ? 'eco-mic' : 'eco-cam', deviceId);
+    } catch (e) {
+      console.warn('[media] changement de périphérique impossible :', e?.message || e);
+    }
+  }
+
+  // Réapplique les périphériques choisis lors d'une visite précédente.
+  async restoreDevicePrefs() {
+    for (const [kind, key] of [
+      ['audioinput', 'eco-mic'],
+      ['videoinput', 'eco-cam'],
+    ]) {
+      const saved = localStorage.getItem(key);
+      if (!saved) continue;
+      try {
+        const devices = await Room.getLocalDevices(kind, false);
+        if (devices.some((d) => d.deviceId === saved)) {
+          await this.room.switchActiveDevice(kind, saved);
+        }
+      } catch {
+        /* périphérique disparu : on garde celui par défaut */
+      }
+    }
   }
 
   async toggleMic() {

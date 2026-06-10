@@ -248,6 +248,20 @@
       #controls button:hover { background: #1b2734; }
       #controls button.off { background: #4a1f1f; border-color: #7a2e2e; }
       #controls button.active { background: var(--accent); color: #06231a; border-color: var(--accent); }
+      #controls select {
+        max-width: 150px;
+        background: #131c26;
+        color: var(--text);
+        border: 1px solid var(--border);
+        border-radius: 999px;
+        padding: 8px 10px;
+        font-size: 12px;
+        cursor: pointer;
+        outline: none;
+        text-overflow: ellipsis;
+      }
+      #controls select:hover { background: #1b2734; }
+      #controls select:empty { display: none; }
       #audio-sink { display: none; }
     </style>
   </head>
@@ -293,7 +307,9 @@
       <div id="tiles"></div>
       <div id="controls">
         <button id="btn-mic" title="Micro">🎤</button>
+        <select id="mic-select" title="Choisir le micro"></select>
         <button id="btn-cam" title="Caméra">🎥</button>
+        <select id="cam-select" title="Choisir la caméra"></select>
         <button id="btn-screen" title="Partager l'écran">🖥️ Partager</button>
       </div>
       <div id="audio-sink"></div>
