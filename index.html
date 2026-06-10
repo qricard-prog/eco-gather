@@ -263,6 +263,59 @@
       #controls select:hover { background: #1b2734; }
       #controls select:empty { display: none; }
       #audio-sink { display: none; }
+
+      /* --- Chat texte + émotes (coin bas-gauche) --- */
+      #social {
+        position: fixed;
+        left: 12px;
+        bottom: 58px;
+        z-index: 25;
+        width: 300px;
+        max-width: 46vw;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        pointer-events: none;
+      }
+      #social.hidden { display: none; }
+      #chat-log {
+        max-height: 168px;
+        overflow-y: auto;
+        display: flex;
+        flex-direction: column;
+        gap: 3px;
+        padding: 8px 10px;
+        background: rgba(10, 14, 19, 0.8);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        font-size: 13px;
+        pointer-events: auto;
+      }
+      #chat-log:empty { display: none; }
+      .chat-msg { line-height: 1.35; color: #dce6f0; word-break: break-word; }
+      .chat-name { font-weight: 600; }
+      #emote-bar { display: flex; gap: 4px; pointer-events: auto; }
+      #emote-bar button {
+        background: rgba(10, 14, 19, 0.8);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        font-size: 17px;
+        line-height: 1;
+        padding: 4px 7px;
+        cursor: pointer;
+      }
+      #emote-bar button:hover { background: #1b2734; transform: translateY(-1px); }
+      #chat-input {
+        background: rgba(10, 14, 19, 0.86);
+        border: 1px solid var(--border);
+        border-radius: 999px;
+        padding: 8px 12px;
+        color: var(--text);
+        font-size: 13px;
+        outline: none;
+        pointer-events: auto;
+      }
+      #chat-input:focus { border-color: var(--accent); }
     </style>
   </head>
   <body>
@@ -313,6 +366,13 @@
         <button id="btn-screen" title="Partager l'écran">🖥️ Partager</button>
       </div>
       <div id="audio-sink"></div>
+    </div>
+
+    <!-- Chat texte + émotes -->
+    <div id="social" class="hidden">
+      <div id="chat-log"></div>
+      <div id="emote-bar"></div>
+      <input id="chat-input" type="text" maxlength="200" placeholder="Écris un message… (Entrée)" />
     </div>
 
     <script type="module" src="/src/main.js"></script>

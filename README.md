@@ -76,13 +76,22 @@ pseudos différents.
 > Astuce : `npm run dev:web` et `npm run dev:server` permettent de lancer chaque process
 > séparément.
 
+### Chat texte & émotes 💬
+- **Chat** (en bas à gauche) : `Entrée` pour écrire, le message apparaît dans le
+  journal (nom coloré) **et** en bulle au-dessus de ton avatar pendant 5 s.
+- **Émotes** : barre d'émojis (👋 👍 🎉 ❤️ 😂 🤔) ou touches `1`-`6` → l'émoji
+  s'élève au-dessus de ton avatar. Tout est diffusé aux autres via Socket.io
+  (aucune minute LiveKit consommée).
+
 ## Commandes (en jeu)
 
 | Action | Touches |
 | --- | --- |
 | Se déplacer | Flèches ou `Z` `Q` `S` `D` |
+| Écrire dans le chat | `Entrée` |
+| Réagir (émote) | `1` à `6` |
 | Régler le rayon de proximité | `[` (réduire) / `]` (agrandir) |
-| Afficher/masquer sa bulle | `P` |
+| Afficher/masquer sa bulle de proximité | `P` |
 
 ## Architecture
 

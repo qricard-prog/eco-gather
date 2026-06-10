@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { WORLD, PLAYER, PROXIMITY, COLORS } from '../config.js';
 import { connect } from '../net.js';
 import { LiveKitMedia } from '../media.js';
+import { Social, EMOTES } from '../social.js';
 
 const WALL = 24; // épaisseur des murs du périmètre
 const SEND_INTERVAL = 60; // ms entre deux envois de position au serveur
@@ -25,6 +26,9 @@ export default class GameScene extends Phaser.Scene {
     this.proximityRadius = PROXIMITY.radius;
     this.showBubble = true;
     this.facing = new Phaser.Math.Vector2(0, 1);
+    this.typing = false; // vrai quand on écrit dans le chat (gèle le déplacement)
+    this.myColor = this.custom?.color ?? COLORS.player;
+    this.bubbles = new Set(); // bulles de chat à repositionner chaque frame
 
     // Autres participants (réseau), indexés par id socket.
     this.others = new Map();
@@ -59,6 +63,7 @@ export default class GameScene extends Phaser.Scene {
     this.setupInput();
     this.buildHud();
     this.connectNetwork();
+    this.setupSocial();
 
     // Coupe proprement les connexions quand la scène s'arrête.
     this.events.once('shutdown', () => {
@@ -428,6 +433,7 @@ export default class GameScene extends Phaser.Scene {
     this.socket.on('init', ({ you, players }) => {
       this.player.setPosition(you.x, you.y);
       this.playerCircle.setFillStyle(you.color);
+      this.myColor = you.color;
       const dog = this.player.getData('dogC');
       if (dog) {
         dog.x = you.x + 30;
@@ -447,6 +453,101 @@ export default class GameScene extends Phaser.Scene {
     });
 
     this.socket.on('player-left', ({ id }) => this.removeRemote(id));
+
+    // Chat reçu d'un autre : journal + bulle au-dessus de son avatar.
+    this.socket.on('chat', ({ id, pseudo, color, text }) => {
+      this.social?.addMessage({ name: pseudo, color, text });
+      const o = this.others.get(id);
+      if (o) this.showChatBubble(o.container, text);
+    });
+
+    // Émote reçue d'un autre : émoji flottant au-dessus de son avatar.
+    this.socket.on('emote', ({ id, emoji }) => {
+      const o = this.others.get(id);
+      if (o) this.spawnEmote(o.container, emoji);
+    });
+  }
+
+  // ----------------------------------------------------------- chat / émotes
+
+  setupSocial() {
+    this.social = new Social({
+      onSendChat: (text) => {
+        this.socket?.emit('chat', { text });
+        this.social.addMessage({ name: this.pseudo, color: this.myColor, text, self: true });
+        this.showChatBubble(this.player, text);
+      },
+      onEmote: (emoji) => {
+        this.socket?.emit('emote', { emoji });
+        this.spawnEmote(this.player, emoji);
+      },
+      onFocusChange: (focused) => {
+        this.typing = focused;
+        if (focused) this.player.body.setVelocity(0, 0);
+        else this.input.keyboard.resetKeys(); // évite une touche « coincée »
+      },
+    });
+  }
+
+  // Bulle de parole temporaire au-dessus d'un avatar. Objet niveau scène,
+  // repositionné chaque frame (voir updateFloaters) pour suivre l'avatar.
+  showChatBubble(container, text) {
+    const prev = container.getData('bubble');
+    if (prev) {
+      prev.timer?.remove();
+      prev.obj.destroy();
+      this.bubbles.delete(prev);
+    }
+    const shown = text.length > 64 ? text.slice(0, 64) + '…' : text;
+    const bubble = this.add
+      .text(container.x, container.y - (PLAYER.radius + 14), shown, {
+        fontFamily: 'system-ui, sans-serif',
+        fontSize: '12px',
+        color: '#11161d',
+        backgroundColor: '#eef4f8',
+        padding: { x: 8, y: 5 },
+        align: 'center',
+        wordWrap: { width: 170 },
+      })
+      .setOrigin(0.5, 1)
+      .setDepth(30);
+    const entry = { obj: bubble, owner: container, timer: null };
+    entry.timer = this.time.delayedCall(5000, () => {
+      bubble.destroy();
+      this.bubbles.delete(entry);
+      container.setData('bubble', null);
+    });
+    container.setData('bubble', entry);
+    this.bubbles.add(entry);
+  }
+
+  // Émoji qui s'élève et s'estompe au-dessus d'un avatar (niveau scène).
+  spawnEmote(container, emoji) {
+    const e = this.add
+      .text(container.x, container.y - (PLAYER.radius + 8), emoji, { fontSize: '26px' })
+      .setOrigin(0.5, 0.5)
+      .setDepth(31);
+    this.tweens.add({
+      targets: e,
+      y: e.y - 46,
+      alpha: 0,
+      duration: 1200,
+      ease: 'Sine.out',
+      onComplete: () => e.destroy(),
+    });
+  }
+
+  // Fait suivre les bulles de chat à leur avatar.
+  updateFloaters() {
+    this.bubbles.forEach((b) => {
+      if (!b.owner.active) {
+        b.timer?.remove();
+        b.obj.destroy();
+        this.bubbles.delete(b);
+        return;
+      }
+      b.obj.setPosition(b.owner.x, b.owner.y - (PLAYER.radius + 14));
+    });
   }
 
   // Prépare la couche média : récupère le token (n'utilise PAS de minutes,
@@ -546,7 +647,19 @@ export default class GameScene extends Phaser.Scene {
     this.input.keyboard.on('keydown-OPEN_BRACKET', () => this.adjustRadius(-PROXIMITY.step));
     this.input.keyboard.on('keydown-CLOSED_BRACKET', () => this.adjustRadius(PROXIMITY.step));
     this.input.keyboard.on('keydown-P', () => {
-      this.showBubble = !this.showBubble;
+      if (!this.typing) this.showBubble = !this.showBubble;
+    });
+
+    // Entrée : focus le chat. Chiffres 1-6 : émotes rapides.
+    this.input.keyboard.on('keydown-ENTER', () => {
+      if (!this.typing) this.social?.focusInput();
+    });
+    ['ONE', 'TWO', 'THREE', 'FOUR', 'FIVE', 'SIX'].forEach((key, i) => {
+      this.input.keyboard.on(`keydown-${key}`, () => {
+        if (this.typing || !EMOTES[i]) return;
+        this.socket?.emit('emote', { emoji: EMOTES[i] });
+        this.spawnEmote(this.player, EMOTES[i]);
+      });
     });
   }
 
@@ -592,6 +705,7 @@ export default class GameScene extends Phaser.Scene {
     this.handleMovement();
     this.interpolateRemotes();
     this.animateAvatars(time);
+    this.updateFloaters();
     this.updateProximity();
     this.updateHud();
   }
@@ -617,6 +731,11 @@ export default class GameScene extends Phaser.Scene {
 
   handleMovement() {
     const body = this.player.body;
+    // Pendant la saisie du chat, l'avatar ne bouge pas.
+    if (this.typing) {
+      body.setVelocity(0, 0);
+      return;
+    }
     let vx = 0;
     let vy = 0;
     if (this.cursors.left.isDown || this.keys.q.isDown) vx -= 1;
@@ -721,7 +840,7 @@ export default class GameScene extends Phaser.Scene {
         `Média : ${media}`,
         `Rayon de proximité : ${this.proximityRadius} px   ([ / ] pour régler)`,
         `Bulle visible : ${this.showBubble ? 'oui' : 'non'}   (P pour basculer)`,
-        `Déplacement : flèches ou ZQSD`,
+        `Déplacement : flèches ou ZQSD   ·   Chat : Entrée   ·   Émotes : 1-6`,
       ].join('\n')
     );
 

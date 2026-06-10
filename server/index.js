@@ -132,6 +132,22 @@ io.on('connection', (socket) => {
     socket.broadcast.emit('player-moved', { id: socket.id, x, y, dir: p.dir });
   });
 
+  // Chat texte (diffusé à tous les autres ; l'émetteur l'affiche localement).
+  socket.on('chat', ({ text } = {}) => {
+    const p = players.get(socket.id);
+    if (!p) return;
+    const clean = String(text || '').slice(0, 200).trim();
+    if (!clean) return;
+    socket.broadcast.emit('chat', { id: socket.id, pseudo: p.pseudo, color: p.color, text: clean });
+  });
+
+  // Émotes / réactions (liste blanche, doit rester synchro avec src/social.js).
+  const EMOTES = ['👋', '👍', '🎉', '❤️', '😂', '🤔'];
+  socket.on('emote', ({ emoji } = {}) => {
+    if (!players.has(socket.id) || !EMOTES.includes(emoji)) return;
+    socket.broadcast.emit('emote', { id: socket.id, emoji });
+  });
+
   socket.on('disconnect', () => {
     const p = players.get(socket.id);
     players.delete(socket.id);
