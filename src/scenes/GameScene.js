@@ -52,6 +52,7 @@ export default class GameScene extends Phaser.Scene {
     this.physics.world.setBounds(0, 0, WORLD.width, WORLD.height);
     this.cameras.main.setBounds(0, 0, WORLD.width, WORLD.height);
 
+    this.blockers = []; // zones physiques invisibles (murs + mobilier)
     this.drawFloor();
     this.buildWalls();
     this.buildFurniture();
@@ -78,63 +79,8 @@ export default class GameScene extends Phaser.Scene {
   }
 
   // ---------------------------------------------------------------- décor
-
-  drawFloor() {
-    const g = this.add.graphics().setDepth(-10);
-    // Base
-    g.fillStyle(COLORS.floor, 1);
-    g.fillRect(0, 0, WORLD.width, WORLD.height);
-
-    // Teintes de zones (très subtiles, pour structurer l'espace)
-    g.fillStyle(0x2b8a5a, 0.10); // détente
-    g.fillRoundedRect(40, 40, 530, 300, 18);
-    g.fillStyle(0x2b4d8a, 0.12); // salle de réunion
-    g.fillRect(1068, 24, 508, 352);
-    g.fillStyle(0x8a5a2b, 0.12); // coin café
-    g.fillRoundedRect(1100, 710, 460, 250, 18);
-    g.fillStyle(0x46466a, 0.08); // open-space
-    g.fillRoundedRect(545, 355, 510, 300, 18);
-
-    // Grille par-dessus pour le sens de l'échelle
-    g.lineStyle(1, COLORS.grid, 0.5);
-    for (let x = 0; x <= WORLD.width; x += 40) g.lineBetween(x, 0, x, WORLD.height);
-    for (let y = 0; y <= WORLD.height; y += 40) g.lineBetween(0, y, WORLD.width, y);
-
-    // Étang à canards (coin bas-gauche)
-    const pond = this.add.graphics().setDepth(-9);
-    pond.fillStyle(0x1d4e6e, 0.95);
-    pond.fillEllipse(250, 800, 270, 165);
-    pond.fillStyle(0x2a6e96, 0.8);
-    pond.fillEllipse(250, 800, 210, 120);
-    pond.lineStyle(3, 0x3b89b8, 0.5);
-    pond.strokeEllipse(250, 800, 270, 165);
-
-    // Tapis de la zone détente
-    const rug = this.add.graphics().setDepth(-9);
-    rug.fillStyle(COLORS.rug, 0.6);
-    rug.fillEllipse(280, 205, 330, 190);
-    rug.lineStyle(2, 0x33506e, 0.6);
-    rug.strokeEllipse(280, 205, 330, 190);
-
-    // Étiquettes de zones
-    this.addZoneLabel(280, 320, 'DÉTENTE');
-    this.addZoneLabel(1320, 345, 'RÉUNION');
-    this.addZoneLabel(1330, 925, 'CAFÉ');
-    this.addZoneLabel(795, 385, 'OPEN-SPACE');
-  }
-
-  addZoneLabel(x, y, text) {
-    this.add
-      .text(x, y, text, {
-        fontFamily: 'system-ui, sans-serif',
-        fontSize: '24px',
-        fontStyle: 'bold',
-        color: '#54708e',
-      })
-      .setOrigin(0.5)
-      .setAlpha(0.55)
-      .setDepth(-8);
-  }
+  // Les visuels sont dessinés (Graphics, coins arrondis, ombres portées) ;
+  // la physique utilise des zones invisibles (this.blockers), découplées.
 
   // Petit élément décoratif emoji (non bloquant).
   addEmoji(x, y, char, size = 24, depth = 1) {
@@ -144,8 +90,144 @@ export default class GameScene extends Phaser.Scene {
       .setDepth(depth);
   }
 
+  // Étiquette de zone discrète (pastille type plan d'étage).
+  addZoneLabel(x, y, text) {
+    const t = this.add
+      .text(x, y, text, {
+        fontFamily: 'system-ui, sans-serif',
+        fontSize: '11px',
+        color: '#8fa6bd',
+        backgroundColor: '#0d141cd9',
+        padding: { x: 9, y: 4 },
+      })
+      .setOrigin(0.5)
+      .setDepth(-6)
+      .setAlpha(0.95);
+    t.setLetterSpacing?.(2);
+    return t;
+  }
+
+  // Obstacles physiques invisibles.
+  addBlocker(x, y, w, h) {
+    const z = this.add.zone(x, y, w, h);
+    this.physics.add.existing(z, true);
+    this.blockers.push(z);
+    return z;
+  }
+
+  addBlockerCircle(x, y, r) {
+    const z = this.add.zone(x, y, r * 2, r * 2);
+    this.physics.add.existing(z, true);
+    z.body.setCircle(r);
+    this.blockers.push(z);
+    return z;
+  }
+
+  drawFloor() {
+    const g = this.add.graphics().setDepth(-10);
+    const T = 64; // dalle de moquette
+
+    // Moquette de bureau : damier très doux (deux teintes proches)
+    g.fillStyle(0x1f2733, 1);
+    g.fillRect(0, 0, WORLD.width, WORLD.height);
+    g.fillStyle(0x222b38, 1);
+    for (let y = 0; y < WORLD.height; y += T) {
+      for (let x = (y / T) % 2 === 0 ? 0 : T; x < WORLD.width; x += T * 2) {
+        g.fillRect(x, y, T, T);
+      }
+    }
+
+    // Détente : parquet (lattes horizontales)
+    g.fillStyle(0x2a3140, 1);
+    g.fillRoundedRect(40, 40, 530, 300, 16);
+    g.fillStyle(0x252c3a, 1);
+    for (let y = 52; y < 322; y += 24) g.fillRect(52, y, 506, 12);
+
+    // Réunion : moquette feutrée bleutée
+    g.fillStyle(0x232f42, 1);
+    g.fillRect(1068, 24, 508, 348);
+    g.fillStyle(0x26334a, 1);
+    for (let y = 24; y < 372; y += T) {
+      for (let x = 1068 + ((y / T) % 2 === 0 ? 0 : T); x < 1576; x += T * 2) {
+        g.fillRect(x, y, Math.min(T, 1576 - x), Math.min(T, 372 - y));
+      }
+    }
+
+    // Café : carrelage chaud
+    g.fillStyle(0x2b251e, 1);
+    g.fillRoundedRect(1100, 710, 460, 250, 16);
+    g.fillStyle(0x2f2922, 1);
+    const C = 28;
+    for (let y = 712; y < 958; y += C) {
+      for (let x = 1102 + (Math.floor(y / C) % 2 === 0 ? 0 : C); x < 1558; x += C * 2) {
+        g.fillRect(x, y, Math.min(C, 1558 - x), Math.min(C, 958 - y));
+      }
+    }
+
+    // Tapis de la zone détente (deux tons + liseré)
+    const rug = this.add.graphics().setDepth(-9);
+    rug.fillStyle(0x2c3a50, 1);
+    rug.fillEllipse(280, 205, 330, 190);
+    rug.fillStyle(0x33445e, 1);
+    rug.fillEllipse(280, 205, 270, 150);
+    rug.lineStyle(2, 0x46587a, 0.8);
+    rug.strokeEllipse(280, 205, 330, 190);
+
+    // Étang (berge, eau, reflets, nénuphars)
+    const pond = this.add.graphics().setDepth(-9);
+    pond.fillStyle(0x152f42, 1);
+    pond.fillEllipse(250, 800, 290, 182);
+    pond.fillStyle(0x1d4e6e, 1);
+    pond.fillEllipse(250, 800, 264, 158);
+    pond.fillStyle(0x2a6e96, 0.9);
+    pond.fillEllipse(244, 794, 200, 110);
+    pond.lineStyle(2, 0x3b89b8, 0.35);
+    pond.strokeEllipse(238, 792, 150, 70);
+    pond.strokeEllipse(252, 800, 220, 120);
+    pond.fillStyle(0x2f8a57, 1); // nénuphars
+    pond.fillCircle(190, 830, 9);
+    pond.fillCircle(322, 776, 7);
+    pond.fillStyle(0x37a566, 1);
+    pond.fillCircle(192, 828, 5);
+
+    // Vignette douce pour la profondeur
+    if (!this.textures.exists('vignette')) {
+      const cv = this.textures.createCanvas('vignette', 512, 320);
+      const ctx = cv.getContext();
+      const grd = ctx.createRadialGradient(256, 160, 90, 256, 160, 310);
+      grd.addColorStop(0, 'rgba(0,0,0,0)');
+      grd.addColorStop(1, 'rgba(0,0,0,0.42)');
+      ctx.fillStyle = grd;
+      ctx.fillRect(0, 0, 512, 320);
+      cv.refresh();
+    }
+    this.add
+      .image(WORLD.width / 2, WORLD.height / 2, 'vignette')
+      .setDisplaySize(WORLD.width + 120, WORLD.height + 90)
+      .setDepth(-7);
+
+    // Étiquettes de zones
+    this.addZoneLabel(795, 374, 'OPEN-SPACE');
+    this.addZoneLabel(1320, 354, 'RÉUNION');
+    this.addZoneLabel(1330, 734, 'CAFÉ');
+    this.addZoneLabel(280, 330, 'DÉTENTE');
+  }
+
+  // Mur avec biseau (haut/gauche clair, bas/droite sombre) — léger relief.
+  drawWallSeg(g, x, y, w, h) {
+    const l = x - w / 2;
+    const t = y - h / 2;
+    g.fillStyle(0x31404f, 1);
+    g.fillRect(l, t, w, h);
+    g.fillStyle(0x41546a, 1);
+    g.fillRect(l, t, w, 3);
+    g.fillRect(l, t, 3, h);
+    g.fillStyle(0x24303c, 1);
+    g.fillRect(l, t + h - 3, w, 3);
+    g.fillRect(l + w - 3, t, 3, h);
+  }
+
   buildWalls() {
-    this.walls = this.physics.add.staticGroup();
     const w = WORLD.width;
     const h = WORLD.height;
     const segs = [
@@ -159,99 +241,164 @@ export default class GameScene extends Phaser.Scene {
       { x: 1060, y: 335, w: 16, h: 90 },
       { x: 1318, y: 380, w: 516, h: 16 },
     ];
-    segs.forEach((s) => this.addStaticRect(this.walls, s, COLORS.wall, COLORS.wallStroke));
+    const g = this.add.graphics().setDepth(2);
+    segs.forEach((s) => {
+      this.drawWallSeg(g, s.x, s.y, s.w, s.h);
+      this.addBlocker(s.x, s.y, s.w, s.h);
+    });
+  }
+
+  // Chaise de bureau (siège + assise, avec ombre).
+  drawChair(sh, g, x, y) {
+    sh.fillStyle(0x000000, 0.22);
+    sh.fillEllipse(x, y + 7, 26, 9);
+    g.fillStyle(0x2c3a4a, 1);
+    g.fillCircle(x, y, 11);
+    g.fillStyle(0x3a4d63, 1);
+    g.fillCircle(x, y - 1, 8);
+  }
+
+  // Plante en pot (pot + feuillage en grappes).
+  drawPlant(sh, g, top, x, y) {
+    sh.fillStyle(0x000000, 0.22);
+    sh.fillEllipse(x, y + 12, 30, 10);
+    g.fillStyle(0x70513a, 1);
+    g.fillRoundedRect(x - 9, y + 2, 18, 12, 4);
+    top.fillStyle(0x27693f, 1);
+    top.fillCircle(x - 7, y - 6, 8);
+    top.fillStyle(0x2f7d4f, 1);
+    top.fillCircle(x + 7, y - 5, 8);
+    top.fillStyle(0x37a566, 1);
+    top.fillCircle(x, y - 12, 9);
+    this.addBlockerCircle(x, y, 16);
   }
 
   buildFurniture() {
-    this.furniture = this.physics.add.staticGroup();
+    const sh = this.add.graphics().setDepth(-1); // ombres portées
+    const g = this.add.graphics().setDepth(0); // corps des meubles
+    const top = this.add.graphics().setDepth(1); // plateaux et détails
 
-    // ---- Open-space : deux rangées de bureaux avec chaises ----
-    const deskRows = [
+    const shadow = (x, y, w, h) => {
+      sh.fillStyle(0x000000, 0.25);
+      sh.fillEllipse(x, y, w, h);
+    };
+
+    // ---- Open-space : deux rangées de bureaux avec écran, clavier, chaise ----
+    [
       { y: 440, chairY: 396 },
       { y: 570, chairY: 614 },
-    ];
-    deskRows.forEach((row) => {
+    ].forEach((row) => {
       [620, 790, 960].forEach((x) => {
-        this.addStaticRect(this.furniture, { x, y: row.y, w: 130, h: 60 }, COLORS.desk, COLORS.wallStroke);
-        this.add.rectangle(x, row.y - 4, 114, 38, COLORS.deskTop).setDepth(1);
-        // Écran sur le bureau + chaise (décoratifs)
-        this.add.rectangle(x, row.y - 10, 30, 18, 0x1c2733).setDepth(2).setStrokeStyle(1, 0x4a6680);
-        this.add.circle(x, row.chairY, 9, 0x2c3a4a).setDepth(0).setStrokeStyle(2, 0x44586e);
+        shadow(x, row.y + 30, 140, 20);
+        g.fillStyle(0x7a5c42, 1);
+        g.fillRoundedRect(x - 65, row.y - 30, 130, 60, 10);
+        g.fillStyle(0x8d6c4e, 1);
+        g.fillRoundedRect(x - 58, row.y - 26, 116, 46, 8);
+        top.fillStyle(0x10161d, 1); // écran
+        top.fillRoundedRect(x - 17, row.y - 24, 34, 20, 3);
+        top.fillStyle(0x3d5a80, 0.9);
+        top.fillRect(x - 13, row.y - 20, 26, 12);
+        top.fillStyle(0x10161d, 1); // pied
+        top.fillRect(x - 3, row.y - 4, 6, 3);
+        top.fillStyle(0x232f3c, 1); // clavier
+        top.fillRoundedRect(x - 15, row.y + 4, 30, 9, 2);
+        this.drawChair(sh, g, x, row.chairY);
+        this.addBlocker(x, row.y, 130, 60);
       });
     });
 
-    // ---- Salle de réunion : grande table + chaises + écran mural ----
-    this.addStaticRect(this.furniture, { x: 1320, y: 200, w: 240, h: 100 }, 0x5a4632, COLORS.wallStroke);
-    this.add.rectangle(1320, 196, 224, 80, 0x73593f).setDepth(1);
+    // ---- Salle de réunion : grande table, 8 chaises, écran mural ----
+    shadow(1320, 252, 250, 24);
+    g.fillStyle(0x6e523c, 1);
+    g.fillRoundedRect(1200, 150, 240, 100, 14);
+    g.fillStyle(0x82664c, 1);
+    g.fillRoundedRect(1208, 156, 224, 88, 11);
+    top.lineStyle(1, 0x95775a, 0.6);
+    top.strokeRoundedRect(1208, 156, 224, 88, 11);
     [
       [1250, 130], [1320, 130], [1390, 130],
       [1250, 270], [1320, 270], [1390, 270],
       [1180, 200], [1460, 200],
-    ].forEach(([cx, cy]) => this.add.circle(cx, cy, 9, 0x2c3a4a).setDepth(0).setStrokeStyle(2, 0x44586e));
-    this.add.rectangle(1320, 42, 180, 12, 0x10161d).setDepth(0).setStrokeStyle(2, 0x4a6680);
-    this.addEmoji(1320, 72, '📊', 26, 0);
+    ].forEach(([cx, cy]) => this.drawChair(sh, g, cx, cy));
+    this.addBlocker(1320, 200, 240, 100);
+    top.fillStyle(0x10161d, 1); // écran mural
+    top.fillRoundedRect(1220, 36, 200, 26, 4);
+    top.fillStyle(0x16222e, 1);
+    top.fillRect(1226, 40, 188, 18);
+    this.addEmoji(1320, 49, '📊', 14, 2);
 
-    // ---- Coin café : comptoir, machine, tabourets, douceurs ----
-    this.addStaticRect(this.furniture, { x: 1330, y: 790, w: 260, h: 44 }, 0x6b4f3a, COLORS.wallStroke);
-    this.add.rectangle(1330, 786, 244, 24, 0x8a6a4f).setDepth(1);
-    this.add.rectangle(1238, 782, 26, 30, 0x222a33).setDepth(2).setStrokeStyle(1, 0x4a6680); // machine
-    this.addEmoji(1310, 784, '☕', 18, 2);
-    this.addEmoji(1392, 784, '🍩', 18, 2);
-    [1260, 1330, 1400].forEach((x) =>
-      this.add.circle(x, 856, 8, 0x2c3a4a).setDepth(0).setStrokeStyle(2, 0x44586e)
-    );
+    // ---- Coin café : comptoir, machine, tabourets ----
+    shadow(1330, 815, 270, 22);
+    g.fillStyle(0x6e523c, 1);
+    g.fillRoundedRect(1200, 768, 260, 44, 10);
+    g.fillStyle(0x82664c, 1);
+    g.fillRoundedRect(1206, 772, 248, 26, 8);
+    top.fillStyle(0x1d242e, 1); // machine à café
+    top.fillRoundedRect(1224, 766, 30, 34, 5);
+    top.fillStyle(0xe74c3c, 1);
+    top.fillCircle(1239, 774, 2.5);
+    this.addEmoji(1312, 784, '☕', 16, 2);
+    this.addEmoji(1392, 784, '🍩', 16, 2);
+    this.addBlocker(1330, 790, 260, 44);
+    [1260, 1330, 1400].forEach((x) => {
+      shadow(x, 862, 22, 8);
+      g.fillStyle(0x4a3a2c, 1);
+      g.fillCircle(x, 856, 9);
+      g.fillStyle(0x5d4a38, 1);
+      g.fillCircle(x, 855, 6);
+    });
 
-    // ---- Zone détente : canapé + bibliothèque + fun ----
-    this.addStaticRect(this.furniture, { x: 170, y: 140, w: 130, h: 50 }, 0x3b5a8a, 0x55779e);
-    this.add.rectangle(170, 122, 130, 16, 0x2f4a73).setDepth(1); // dossier
-    this.add.rectangle(110, 140, 14, 46, 0x2f4a73).setDepth(1); // accoudoirs
-    this.add.rectangle(230, 140, 14, 46, 0x2f4a73).setDepth(1);
-    this.addStaticRect(this.furniture, { x: 445, y: 105, w: 150, h: 30 }, 0x5a4632, COLORS.wallStroke);
-    [395, 425, 455, 485].forEach((x, i) =>
-      this.add.rectangle(x, 103, 12, 18, [0xe06b8f, 0x5b8def, 0xf2c14e, 0x36c98f][i]).setDepth(1)
-    );
+    // ---- Zone détente : canapé, bibliothèque, fun ----
+    shadow(170, 168, 150, 20);
+    g.fillStyle(0x365081, 1); // coque
+    g.fillRoundedRect(100, 112, 140, 58, 14);
+    g.fillStyle(0x4a6da3, 1); // coussins
+    g.fillRoundedRect(112, 132, 54, 32, 8);
+    g.fillRoundedRect(174, 132, 54, 32, 8);
+    g.fillStyle(0x3f5d8c, 1); // dossier
+    g.fillRoundedRect(100, 112, 140, 18, 9);
+    this.addBlocker(170, 140, 140, 56);
+
+    shadow(445, 122, 160, 14);
+    g.fillStyle(0x5a4632, 1); // bibliothèque
+    g.fillRoundedRect(367, 89, 156, 32, 6);
+    g.fillStyle(0x6b5540, 1);
+    g.fillRoundedRect(373, 93, 144, 24, 4);
+    [0xe06b8f, 0x5b8def, 0xf2c14e, 0x36c98f, 0xb06bd6].forEach((c, i) => {
+      top.fillStyle(c, 1);
+      top.fillRoundedRect(385 + i * 26, 95, 14, 20, 2);
+    });
+    this.addBlocker(445, 105, 156, 32);
+
     this.addEmoji(510, 250, '🎸', 30, 1);
     this.addEmoji(340, 235, '🐈', 26, 1); // le chat du bureau, en sieste
 
-    // ---- Étang : canards (l'étang bloque le passage) ----
-    this.addStaticCircle(this.furniture, { x: 250, y: 800, r: 76 }, 0x000000, 0); // collider invisible
+    // ---- Étang : canards (l'eau bloque le passage) ----
+    this.addBlockerCircle(250, 800, 76);
     this.addEmoji(225, 785, '🦆', 26, 1);
     this.addEmoji(300, 830, '🦆', 18, 1);
 
     // ---- Table de ping-pong ----
-    this.addStaticRect(this.furniture, { x: 760, y: 830, w: 210, h: 110 }, 0x1f6e46, 0xd9e6df);
-    this.add.rectangle(760, 830, 4, 102, 0xd9e6df).setDepth(1); // filet
-    this.addEmoji(650, 770, '🏓', 22, 1);
+    shadow(760, 868, 220, 22);
+    g.fillStyle(0x256b47, 1);
+    g.fillRoundedRect(655, 775, 210, 110, 10);
+    g.fillStyle(0x2c7a52, 1);
+    g.fillRoundedRect(661, 780, 198, 100, 8);
+    top.lineStyle(2, 0xe8f2ec, 0.95);
+    top.strokeRoundedRect(661, 780, 198, 100, 8);
+    top.fillStyle(0xe8f2ec, 1);
+    top.fillRect(758, 780, 4, 100); // filet
+    this.addEmoji(650, 770, '🏓', 22, 2);
+    this.addBlocker(760, 830, 210, 110);
 
     // ---- Plantes vertes ----
     [
-      { x: 1020, y: 100, r: 20 },
-      { x: 600, y: 100, r: 20 },
-      { x: 80, y: 930, r: 18 },
-      { x: 1530, y: 440, r: 18 },
-      { x: 1520, y: 925, r: 18 },
-    ].forEach((p) => {
-      const c = this.addStaticCircle(this.furniture, p, COLORS.plant, 1);
-      c.setStrokeStyle(3, 0x1f5a37, 1);
-    });
+      [1020, 100], [600, 100], [80, 930], [1530, 440], [1520, 925],
+    ].forEach(([x, y]) => this.drawPlant(sh, g, top, x, y));
 
     // ---- Petites touches drôles ----
     this.addEmoji(1000, 945, '🚧', 22, 1);
     this.addEmoji(545, 940, '🛹', 22, 1);
-  }
-
-  addStaticRect(group, s, fill, stroke) {
-    const rect = this.add.rectangle(s.x, s.y, s.w, s.h, fill).setDepth(0);
-    rect.setStrokeStyle(2, stroke, 1);
-    group.add(rect);
-    return rect;
-  }
-
-  addStaticCircle(group, c, fill, alpha = 1) {
-    const circle = this.add.circle(c.x, c.y, c.r, fill, alpha).setDepth(0);
-    group.add(circle);
-    circle.body.setCircle(c.r, -c.r, -c.r);
-    return circle;
   }
 
   // --------------------------------------------------------------- avatars
@@ -409,8 +556,7 @@ export default class GameScene extends Phaser.Scene {
       this.player.setData('dogC', this.makeDog(this.player.x + 30, this.player.y + 10));
     }
 
-    this.physics.add.collider(this.player, this.walls);
-    this.physics.add.collider(this.player, this.furniture);
+    this.physics.add.collider(this.player, this.blockers);
   }
 
   // ---------------------------------------------------------------- réseau
@@ -731,12 +877,12 @@ export default class GameScene extends Phaser.Scene {
     const pad = 12;
     this.hud = this.add
       .text(pad, pad, '', {
-        fontFamily: 'ui-monospace, monospace',
-        fontSize: '13px',
+        fontFamily: 'system-ui, sans-serif',
+        fontSize: '12px',
         color: '#cfe0ee',
-        backgroundColor: '#0a0e13d9',
-        padding: { x: 10, y: 8 },
-        lineSpacing: 4,
+        backgroundColor: '#0a0e13cc',
+        padding: { x: 9, y: 6 },
+        lineSpacing: 3,
       })
       .setScrollFactor(0)
       .setDepth(100);
@@ -881,20 +1027,12 @@ export default class GameScene extends Phaser.Scene {
   }
 
   updateHud() {
-    const remotes = this.others.size;
-    const net = this.online ? `🟢 connecté · ${remotes + 1} en ligne` : '🔴 hors-ligne (solo)';
-    const media = !this.mediaToken
-      ? 'positions seules'
-      : this.media?.connected
-        ? '🎥 actif (consomme des minutes)'
-        : '💤 en veille (0 minute)';
+    const net = this.online ? `🟢 ${this.others.size + 1} en ligne` : '🔴 hors-ligne';
+    const media = !this.mediaToken ? '' : this.media?.connected ? '  ·  🎥' : '  ·  💤';
     this.hud.setText(
       [
-        `Pseudo : ${this.pseudo}    ${net}`,
-        `Média : ${media}`,
-        `Rayon de proximité : ${this.proximityRadius} px   ([ / ] pour régler)`,
-        `Bulle visible : ${this.showBubble ? 'oui' : 'non'}   (P pour basculer)`,
-        `Déplacement : flèches ou ZQSD   ·   Chat : Entrée   ·   Émotes : 1-6`,
+        `${this.pseudo}  ·  ${net}${media}`,
+        `ZQSD/flèches  ·  Chat : ⏎  ·  Émotes : 1-6  ·  Bulle : P  ·  Rayon : [ ]`,
       ].join('\n')
     );
 
