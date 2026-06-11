@@ -48,4 +48,14 @@ export const AVATAR_COLORS = [
 ];
 
 // Accessoires de tête disponibles (id stable côté réseau).
-export const HATS = ['none', 'casquette', 'hautdeforme', 'fete'];
+export const HATS = ['none', 'casquette', 'hautdeforme', 'fete', 'couronne', 'lunettes', 'casque'];
+
+// Compagnons disponibles (id réseau + emoji affiché en jeu et en aperçu).
+export const PETS = [
+  { id: 'chien', emoji: '🐕', label: 'Chien' },
+  { id: 'dino', emoji: '🦖', label: 'Dino' },
+  { id: 'wombat', emoji: '🦡', label: 'Wombat' },
+  { id: 'kangourou', emoji: '🦘', label: 'Kangourou' },
+  { id: 'perroquet', emoji: '🦜', label: 'Perroquet' },
+  { id: 'poubelle', emoji: '🗑️', label: 'Poubelle' },
+];

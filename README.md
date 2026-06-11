@@ -20,10 +20,15 @@ Cible : ~5 personnes, usage interne, sans création de compte (juste un pseudo).
 ### Personnalisation de l'avatar 🎨
 À l'entrée, chacun choisit (avec aperçu en direct) :
 - sa **couleur** (palette de 7) ;
-- son **accessoire** : casquette 🧢, haut-de-forme 🎩 ou chapeau de fête 🥳 ;
-- son **compagnon** : un petit chien 🐶 qui trottine derrière l'avatar.
-La personnalisation est synchronisée : les autres voient ta couleur, ton chapeau
-et ton chien. L'avatar garde sa bouille ronde avec ses petits yeux directionnels.
+- son **accessoire** : casquette 🧢, haut-de-forme 🎩, chapeau de fête 🥳,
+  couronne 👑, lunettes de soleil 🕶️ (elles suivent le regard !) ou casque audio 🎧 ;
+- son **compagnon** : chien 🐕, dino 🦖, wombat 🦡, kangourou 🦘, perroquet 🦜
+  ou… une poubelle 🗑️ — il trottine derrière l'avatar.
+La personnalisation est synchronisée : les autres voient ta couleur, ton accessoire
+et ton compagnon. L'avatar garde sa bouille ronde avec ses petits yeux directionnels.
+
+### Danse 🕺
+Touche `X` : l'avatar danse (~2,5 s de déhanché + 🎶), visible par tout le monde.
 
 ### Étape 2 ✅ — multijoueur positions
 - Serveur **Node + Express + Socket.io** (`server/index.js`), état **en mémoire**
@@ -90,6 +95,7 @@ pseudos différents.
 | Se déplacer | Flèches ou `Z` `Q` `S` `D` |
 | Écrire dans le chat | `Entrée` |
 | Réagir (émote) | `1` à `6` |
+| Danser | `X` |
 | Régler le rayon de proximité | `[` (réduire) / `]` (agrandir) |
 | Afficher/masquer sa bulle de proximité | `P` |
 

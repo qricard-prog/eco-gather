@@ -79,7 +79,9 @@ const players = new Map();
 
 // Palette de secours si le client n'envoie pas de couleur valide.
 const PALETTE = [0x36c98f, 0x5b8def, 0xf2c14e, 0xe06b8f, 0xb06bd6, 0x4fd6c8, 0xf08a4b];
-const HATS = ['none', 'casquette', 'hautdeforme', 'fete'];
+// Doit rester synchro avec src/config.js
+const HATS = ['none', 'casquette', 'hautdeforme', 'fete', 'couronne', 'lunettes', 'casque'];
+const PETS = ['none', 'chien', 'dino', 'wombat', 'kangourou', 'perroquet', 'poubelle'];
 let colorCursor = 0;
 function nextColor() {
   const c = PALETTE[colorCursor % PALETTE.length];
@@ -96,7 +98,7 @@ function spawnPoint() {
 }
 
 io.on('connection', (socket) => {
-  socket.on('join', ({ pseudo, color, hat, dog } = {}) => {
+  socket.on('join', ({ pseudo, color, hat, pet } = {}) => {
     const { x, y } = spawnPoint();
     const player = {
       id: socket.id,
@@ -107,7 +109,7 @@ io.on('connection', (socket) => {
       // Personnalisation choisie à l'entrée (validée côté serveur).
       color: Number.isInteger(color) && color >= 0 && color <= 0xffffff ? color : nextColor(),
       hat: HATS.includes(hat) ? hat : 'none',
-      dog: Boolean(dog),
+      pet: PETS.includes(pet) ? pet : 'none',
     };
     players.set(socket.id, player);
 
@@ -146,6 +148,11 @@ io.on('connection', (socket) => {
   socket.on('emote', ({ emoji } = {}) => {
     if (!players.has(socket.id) || !EMOTES.includes(emoji)) return;
     socket.broadcast.emit('emote', { id: socket.id, emoji });
+  });
+
+  // Danse : simple signal relayé, l'animation est jouée par chaque client.
+  socket.on('dance', () => {
+    if (players.has(socket.id)) socket.broadcast.emit('dance', { id: socket.id });
   });
 
   socket.on('disconnect', () => {

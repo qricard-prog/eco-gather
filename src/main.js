@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import GameScene from './scenes/GameScene.js';
-import { WORLD, COLORS, AVATAR_COLORS } from './config.js';
+import { WORLD, COLORS, AVATAR_COLORS, PETS } from './config.js';
 
 // Le jeu n'est lancé qu'une fois le pseudo saisi (écran d'accueil HTML).
 function startGame(pseudo, custom) {
@@ -35,10 +35,10 @@ const input = document.getElementById('pseudo');
 const button = document.getElementById('enter');
 const swatchesEl = document.getElementById('swatches');
 const hatsEl = document.getElementById('hats');
-const dogToggle = document.getElementById('dog-toggle');
+const petsEl = document.getElementById('pets');
 const preview = document.getElementById('preview');
 
-const custom = { color: AVATAR_COLORS[0], hat: 'none', dog: false };
+const custom = { color: AVATAR_COLORS[0], hat: 'none', pet: 'none' };
 
 const hex = (c) => '#' + c.toString(16).padStart(6, '0');
 
@@ -67,11 +67,21 @@ hatsEl.querySelectorAll('.chip').forEach((chip) => {
   });
 });
 
-// Compagnon
-dogToggle.addEventListener('click', () => {
-  custom.dog = !custom.dog;
-  dogToggle.classList.toggle('sel', custom.dog);
-  drawPreview();
+// Compagnons : chips générées depuis la config (+ « Aucun » déjà présent).
+PETS.forEach((p) => {
+  const b = document.createElement('button');
+  b.className = 'chip';
+  b.dataset.pet = p.id;
+  b.textContent = `${p.emoji} ${p.label}`;
+  petsEl.appendChild(b);
+});
+petsEl.querySelectorAll('.chip').forEach((chip) => {
+  chip.addEventListener('click', () => {
+    custom.pet = chip.dataset.pet;
+    petsEl.querySelectorAll('.chip').forEach((c) => c.classList.remove('sel'));
+    chip.classList.add('sel');
+    drawPreview();
+  });
 });
 
 // --- Aperçu de l'avatar (même style que le rendu Phaser en jeu) ---
@@ -81,7 +91,7 @@ function drawPreview() {
   const H = preview.height;
   ctx.clearRect(0, 0, W, H);
 
-  const cx = custom.dog ? W / 2 - 22 : W / 2;
+  const cx = custom.pet !== 'none' ? W / 2 - 22 : W / 2;
   const cy = H / 2 + 8;
   const r = 26;
 
@@ -146,53 +156,68 @@ function drawPreview() {
     ctx.beginPath();
     ctx.arc(cx, cy - r - 24, 5, 0, Math.PI * 2);
     ctx.fill();
+  } else if (custom.hat === 'couronne') {
+    ctx.fillStyle = '#f2c14e';
+    ctx.fillRect(cx - 17, cy - r - 2, 34, 11);
+    [-12, 0, 12].forEach((dx) => {
+      ctx.beginPath();
+      ctx.moveTo(cx + dx, cy - r - 16);
+      ctx.lineTo(cx + dx - 7, cy - r - 2);
+      ctx.lineTo(cx + dx + 7, cy - r - 2);
+      ctx.closePath();
+      ctx.fill();
+    });
+    ctx.fillStyle = '#e06b8f';
+    ctx.beginPath();
+    ctx.arc(cx, cy - r + 3, 3.2, 0, Math.PI * 2);
+    ctx.fill();
+  } else if (custom.hat === 'lunettes') {
+    ctx.fillStyle = '#10161d';
+    [-8, 8].forEach((dx) => {
+      ctx.beginPath();
+      ctx.arc(cx + dx, cy + 5, 7.5, 0, Math.PI * 2);
+      ctx.fill();
+    });
+    ctx.fillRect(cx - 4, cy + 3, 8, 3);
+    ctx.fillStyle = 'rgba(255,255,255,0.35)';
+    ctx.beginPath();
+    ctx.arc(cx - 10, cy + 3, 2.2, 0, Math.PI * 2);
+    ctx.fill();
+  } else if (custom.hat === 'casque') {
+    ctx.strokeStyle = '#222a33';
+    ctx.lineWidth = 7;
+    ctx.beginPath();
+    ctx.arc(cx, cy - 6, r - 1, Math.PI, 0);
+    ctx.stroke();
+    ctx.fillStyle = '#222a33';
+    [-r + 2, r - 2].forEach((dx) => {
+      ctx.beginPath();
+      ctx.arc(cx + dx, cy - 3, 9, 0, Math.PI * 2);
+      ctx.fill();
+    });
+    ctx.fillStyle = '#3d5a80';
+    [-r + 2, r - 2].forEach((dx) => {
+      ctx.beginPath();
+      ctx.arc(cx + dx, cy - 3, 4.5, 0, Math.PI * 2);
+      ctx.fill();
+    });
   }
 
-  // Petit chien
-  if (custom.dog) {
-    const dx = cx + 62;
-    const dy = cy + 16;
-    ctx.fillStyle = 'rgba(0,0,0,0.25)';
-    ctx.beginPath();
-    ctx.ellipse(dx, dy + 12, 16, 5, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = '#8d6e4a';
-    ctx.beginPath();
-    ctx.ellipse(dx - 4, dy, 13, 8, 0, 0, Math.PI * 2); // corps
-    ctx.fill();
-    ctx.beginPath();
-    ctx.arc(dx + 10, dy - 6, 9, 0, Math.PI * 2); // tête
-    ctx.fill();
-    // oreilles
-    ctx.fillStyle = '#6d5238';
-    ctx.beginPath();
-    ctx.moveTo(dx + 4, dy - 13);
-    ctx.lineTo(dx + 7, dy - 21);
-    ctx.lineTo(dx + 11, dy - 13);
-    ctx.closePath();
-    ctx.fill();
-    ctx.beginPath();
-    ctx.moveTo(dx + 12, dy - 14);
-    ctx.lineTo(dx + 15, dy - 21);
-    ctx.lineTo(dx + 18, dy - 12);
-    ctx.closePath();
-    ctx.fill();
-    // queue
-    ctx.beginPath();
-    ctx.moveTo(dx - 16, dy - 2);
-    ctx.lineTo(dx - 23, dy - 9);
-    ctx.lineTo(dx - 13, dy - 6);
-    ctx.closePath();
-    ctx.fill();
-    // œil + truffe
-    ctx.fillStyle = '#12202c';
-    ctx.beginPath();
-    ctx.arc(dx + 13, dy - 7, 1.7, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = '#2b2b2b';
-    ctx.beginPath();
-    ctx.arc(dx + 18.5, dy - 4.5, 2.2, 0, Math.PI * 2);
-    ctx.fill();
+  // Compagnon (même emoji qu'en jeu)
+  if (custom.pet !== 'none') {
+    const pet = PETS.find((p) => p.id === custom.pet);
+    if (pet) {
+      const dx = cx + 60;
+      const dy = cy + 18;
+      ctx.fillStyle = 'rgba(0,0,0,0.25)';
+      ctx.beginPath();
+      ctx.ellipse(dx, dy + 14, 17, 5, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.font = '32px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(pet.emoji, dx, dy);
+    }
   }
 }
 

@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { WORLD, PLAYER, PROXIMITY, COLORS } from '../config.js';
+import { WORLD, PLAYER, PROXIMITY, COLORS, PETS } from '../config.js';
 import { connect } from '../net.js';
 import { LiveKitMedia } from '../media.js';
 import { Social, EMOTES } from '../social.js';
@@ -21,7 +21,7 @@ export default class GameScene extends Phaser.Scene {
     this.custom = {
       color: data?.color ?? COLORS.player,
       hat: data?.hat || 'none',
-      dog: Boolean(data?.dog),
+      pet: data?.pet || 'none',
     };
     this.proximityRadius = PROXIMITY.radius;
     this.showBubble = true;
@@ -428,7 +428,7 @@ export default class GameScene extends Phaser.Scene {
     faceG.add([eyeL, eyeR, pupL, pupR]);
 
     bodyG.add([disc, highlight, faceG]);
-    this.addHat(bodyG, opts.hat);
+    this.addHat(bodyG, faceG, opts.hat);
 
     const label = this.add
       .text(0, r + 12, name, {
@@ -453,7 +453,8 @@ export default class GameScene extends Phaser.Scene {
   }
 
   // Accessoire de tête, dessiné dans le groupe « corps » (suit le rebond).
-  addHat(bodyG, hat) {
+  // Les lunettes sont ajoutées au visage pour suivre le regard.
+  addHat(bodyG, faceG, hat) {
     const r = PLAYER.radius;
     if (hat === 'casquette') {
       const dome = this.add.arc(0, -r * 0.55, r * 0.75, 180, 360, false, 0xe74c3c);
@@ -470,47 +471,64 @@ export default class GameScene extends Phaser.Scene {
       const cone = this.add.triangle(0, -r - 8, 10, 0, 0, 24, 20, 24, 0xf2c14e);
       const pompom = this.add.circle(0, -r - 20, 4.5, 0xe06b8f);
       bodyG.add([cone, pompom]);
+    } else if (hat === 'couronne') {
+      const band = this.add.rectangle(0, -r + 2, 22, 8, 0xf2c14e);
+      const points = [-7, 0, 7].map((dx) =>
+        this.add.triangle(dx, -r - 4, 4, 0, 0, 8, 8, 8, 0xf2c14e)
+      );
+      const gem = this.add.circle(0, -r + 2, 2.2, 0xe06b8f);
+      bodyG.add([band, ...points, gem]);
+    } else if (hat === 'lunettes') {
+      const left = this.add.circle(-5, -1, 4.6, 0x10161d);
+      const right = this.add.circle(5, -1, 4.6, 0x10161d);
+      const bridge = this.add.rectangle(0, -1.5, 4, 2, 0x10161d);
+      const glint = this.add.circle(-6.5, -2.5, 1.3, 0xffffff, 0.4);
+      faceG.add([left, right, bridge, glint]);
+    } else if (hat === 'casque') {
+      const band = this.add.arc(0, -4, r - 1, 180, 360, false).setStrokeStyle(5, 0x222a33);
+      const cupL = this.add.circle(-r + 1, -2, 6, 0x222a33);
+      const cupR = this.add.circle(r - 1, -2, 6, 0x222a33);
+      const padL = this.add.circle(-r + 1, -2, 3, 0x3d5a80);
+      const padR = this.add.circle(r - 1, -2, 3, 0x3d5a80);
+      bodyG.add([band, cupL, cupR, padL, padR]);
     }
   }
 
-  // Petit chien compagnon (Container indépendant qui suit son maître).
-  makeDog(x, y) {
+  // Compagnon (emoji) : Container indépendant qui suit son maître.
+  makePet(petId, x, y) {
+    const def = PETS.find((p) => p.id === petId);
+    if (!def) return null;
     const c = this.add.container(x, y).setDepth(9);
-    const shadow = this.add.ellipse(0, 8, 24, 7, 0x000000, 0.25);
+    const shadow = this.add.ellipse(0, 11, 26, 8, 0x000000, 0.25);
     const inner = this.add.container(0, 0);
-    const tail = this.add.triangle(-13, -3, 0, 0, 8, 6, 0, 8, 0x6d5238);
-    const body = this.add.ellipse(-3, 0, 18, 11, 0x8d6e4a);
-    const head = this.add.circle(8, -5, 7, 0x8d6e4a);
-    const earL = this.add.triangle(5, -11, 3, 0, 0, 8, 6, 8, 0x6d5238);
-    const earR = this.add.triangle(11, -11, 3, 0, 0, 8, 6, 8, 0x6d5238);
-    const eye = this.add.circle(10, -6, 1.5, 0x12202c);
-    const nose = this.add.circle(14.5, -3.5, 2, 0x2b2b2b);
-    inner.add([tail, body, head, earL, earR, eye, nose]);
+    const sprite = this.add.text(0, 0, def.emoji, { fontSize: '24px' }).setOrigin(0.5);
+    inner.add(sprite);
     c.add([shadow, inner]);
     c.setData('inner', inner);
     c.setData('phase', Math.random() * Math.PI * 2);
     return c;
   }
 
-  // Le chien suit son maître avec un temps de retard, trottine et regarde
-  // dans la direction du déplacement.
-  updateDog(owner, time) {
-    const dog = owner.getData('dogC');
-    if (!dog) return;
+  // Le compagnon suit son maître avec un temps de retard, trottine et
+  // regarde dans la direction du déplacement.
+  updatePet(owner, time) {
+    const pet = owner.getData('petC');
+    if (!pet) return;
     const dir = owner.getData('dir') || { x: 0, y: 1 };
-    const tx = owner.x - dir.x * 36;
-    const ty = owner.y - dir.y * 36;
-    dog.x = Phaser.Math.Linear(dog.x, tx, 0.08);
-    dog.y = Phaser.Math.Linear(dog.y, ty, 0.08);
+    const tx = owner.x - dir.x * 38;
+    const ty = owner.y - dir.y * 38;
+    pet.x = Phaser.Math.Linear(pet.x, tx, 0.08);
+    pet.y = Phaser.Math.Linear(pet.y, ty, 0.08);
 
-    const moving = Math.hypot(tx - dog.x, ty - dog.y) > 2.5;
-    const inner = dog.getData('inner');
+    const moving = Math.hypot(tx - pet.x, ty - pet.y) > 2.5;
+    const inner = pet.getData('inner');
     const t = time / 1000;
-    const ph = dog.getData('phase');
+    const ph = pet.getData('phase');
     inner.y = moving
       ? -Math.abs(Math.sin(t * 11 + ph)) * 2.5
       : -(Math.sin(t * 2.2 + ph) + 1) * 0.5;
-    if (Math.abs(dir.x) > 0.15) inner.scaleX = dir.x < 0 ? -1 : 1;
+    // La plupart des emojis animaux regardent vers la gauche nativement.
+    if (Math.abs(dir.x) > 0.15) inner.scaleX = dir.x > 0 ? -1 : 1;
   }
 
   // Anime un avatar : regard (yeux vers la direction), rebond de marche
@@ -526,6 +544,18 @@ export default class GameScene extends Phaser.Scene {
     // Regard
     faceG.x = dir.x * 4.5;
     faceG.y = dir.y * 4.5 - 1;
+
+    // Danse : gros rebond + déhanché + petit squash, prioritaire sur le reste.
+    if ((container.getData('danceUntil') || 0) > time) {
+      const bounce = Math.abs(Math.sin(t * 11 + phase)) * 7;
+      bodyG.y = -bounce;
+      bodyG.angle = Math.sin(t * 9 + phase) * 16;
+      bodyG.setScale(1 + Math.sin(t * 18 + phase) * 0.06, 1 - Math.sin(t * 18 + phase) * 0.06);
+      shadow.setScale(1 - bounce * 0.03, 1 - bounce * 0.03);
+      return;
+    }
+    bodyG.angle = 0;
+    bodyG.setScale(1, 1);
 
     // Rebond / respiration
     let bob;
@@ -552,8 +582,8 @@ export default class GameScene extends Phaser.Scene {
     this.player.body.setCollideWorldBounds(true);
     this.playerCircle = this.player.getData('circle');
 
-    if (this.custom.dog) {
-      this.player.setData('dogC', this.makeDog(this.player.x + 30, this.player.y + 10));
+    if (this.custom.pet !== 'none') {
+      this.player.setData('petC', this.makePet(this.custom.pet, this.player.x + 30, this.player.y + 10));
     }
 
     this.physics.add.collider(this.player, this.blockers);
@@ -576,7 +606,7 @@ export default class GameScene extends Phaser.Scene {
         pseudo: this.pseudo,
         color: this.custom.color,
         hat: this.custom.hat,
-        dog: this.custom.dog,
+        pet: this.custom.pet,
       });
       this.refreshMediaToken();
     });
@@ -600,10 +630,10 @@ export default class GameScene extends Phaser.Scene {
       this.player.setPosition(you.x, you.y);
       this.playerCircle.setFillStyle(you.color);
       this.myColor = you.color;
-      const dog = this.player.getData('dogC');
-      if (dog) {
-        dog.x = you.x + 30;
-        dog.y = you.y + 10;
+      const pet = this.player.getData('petC');
+      if (pet) {
+        pet.x = you.x + 30;
+        pet.y = you.y + 10;
       }
       players.forEach((p) => this.addRemote(p));
     });
@@ -632,6 +662,19 @@ export default class GameScene extends Phaser.Scene {
       const o = this.others.get(id);
       if (o) this.spawnEmote(o.container, emoji);
     });
+
+    // Danse d'un autre participant.
+    this.socket.on('dance', ({ id }) => {
+      const o = this.others.get(id);
+      if (o) this.startDance(o.container);
+    });
+  }
+
+  // Lance la danse d'un avatar (~2,6 s) ; l'animation est jouée dans
+  // animateAvatar tant que danceUntil n'est pas dépassé.
+  startDance(container) {
+    container.setData('danceUntil', this.time.now + 2600);
+    this.spawnEmote(container, '🎶');
   }
 
   // ----------------------------------------------------------- chat / émotes
@@ -720,7 +763,7 @@ export default class GameScene extends Phaser.Scene {
   // propre — appelé à chaque (re)connexion. Le joueur local est conservé.
   resetWorld() {
     this.others.forEach((o) => {
-      o.container.getData('dogC')?.destroy();
+      o.container.getData('petC')?.destroy();
       const b = o.container.getData('bubble');
       if (b) {
         b.timer?.remove();
@@ -807,7 +850,7 @@ export default class GameScene extends Phaser.Scene {
   addRemote(p) {
     if (this.others.has(p.id)) return;
     const container = this.makeAvatar(p.x, p.y, p.pseudo, p.color, { hat: p.hat });
-    if (p.dog) container.setData('dogC', this.makeDog(p.x + 30, p.y + 10));
+    if (p.pet && p.pet !== 'none') container.setData('petC', this.makePet(p.pet, p.x + 30, p.y + 10));
     this.others.set(p.id, {
       id: p.id,
       type: 'remote',
@@ -826,7 +869,7 @@ export default class GameScene extends Phaser.Scene {
     const o = this.others.get(id);
     if (!o) return;
     this.media?.unsubscribeFrom(id);
-    o.container.getData('dogC')?.destroy();
+    o.container.getData('petC')?.destroy();
     o.container.destroy();
     this.others.delete(id);
     this.nearby = this.nearby.filter((n) => n !== o.name);
@@ -850,9 +893,14 @@ export default class GameScene extends Phaser.Scene {
       if (!this.typing) this.showBubble = !this.showBubble;
     });
 
-    // Entrée : focus le chat. Chiffres 1-6 : émotes rapides.
+    // Entrée : focus le chat. Chiffres 1-6 : émotes rapides. X : danse !
     this.input.keyboard.on('keydown-ENTER', () => {
       if (!this.typing) this.social?.focusInput();
+    });
+    this.input.keyboard.on('keydown-X', () => {
+      if (this.typing) return;
+      this.startDance(this.player);
+      this.socket?.emit('dance');
     });
     ['ONE', 'TWO', 'THREE', 'FOUR', 'FIVE', 'SIX'].forEach((key, i) => {
       this.input.keyboard.on(`keydown-${key}`, () => {
@@ -917,7 +965,7 @@ export default class GameScene extends Phaser.Scene {
     this.player.getData('dir').x = this.facing.x;
     this.player.getData('dir').y = this.facing.y;
     this.animateAvatar(this.player, pMoving, time);
-    this.updateDog(this.player, time);
+    this.updatePet(this.player, time);
 
     this.others.forEach((o) => {
       const dir = o.container.getData('dir');
@@ -925,7 +973,7 @@ export default class GameScene extends Phaser.Scene {
       dir.x = o.dir?.x ?? 0;
       dir.y = o.dir?.y ?? 1;
       this.animateAvatar(o.container, moving, time);
-      this.updateDog(o.container, time);
+      this.updatePet(o.container, time);
     });
   }
 
@@ -1032,7 +1080,7 @@ export default class GameScene extends Phaser.Scene {
     this.hud.setText(
       [
         `${this.pseudo}  ·  ${net}${media}`,
-        `ZQSD/flèches  ·  Chat : ⏎  ·  Émotes : 1-6  ·  Bulle : P  ·  Rayon : [ ]`,
+        `ZQSD/flèches  ·  Chat : ⏎  ·  Émotes : 1-6  ·  Danse : X  ·  Bulle : P  ·  Rayon : [ ]`,
       ].join('\n')
     );
 
