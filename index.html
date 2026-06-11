@@ -264,6 +264,39 @@
       #controls select:empty { display: none; }
       #audio-sink { display: none; }
 
+      /* --- Overlay de connexion / réveil --- */
+      #conn-overlay {
+        position: fixed;
+        inset: 0;
+        z-index: 50;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: rgba(8, 11, 16, 0.82);
+        backdrop-filter: blur(2px);
+      }
+      #conn-overlay.hidden { display: none; }
+      .conn-card {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 16px;
+        color: var(--text);
+        font-size: 15px;
+        text-align: center;
+        padding: 28px 32px;
+      }
+      .conn-card p { margin: 0; max-width: 320px; line-height: 1.5; }
+      .spinner {
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        border: 4px solid #2a3a4d;
+        border-top-color: var(--accent);
+        animation: spin 0.9s linear infinite;
+      }
+      @keyframes spin { to { transform: rotate(360deg); } }
+
       /* --- Chat texte + émotes (coin bas-gauche) --- */
       #social {
         position: fixed;
@@ -366,6 +399,14 @@
         <button id="btn-screen" title="Partager l'écran">🖥️ Partager</button>
       </div>
       <div id="audio-sink"></div>
+    </div>
+
+    <!-- Overlay de connexion / réveil du serveur -->
+    <div id="conn-overlay" class="hidden">
+      <div class="conn-card">
+        <div class="spinner"></div>
+        <p id="conn-msg">Connexion à l'espace…</p>
+      </div>
     </div>
 
     <!-- Chat texte + émotes -->

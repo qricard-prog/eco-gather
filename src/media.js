@@ -344,6 +344,7 @@ export class LiveKitMedia {
     this.room = null;
     this.connected = false;
     this.connecting = false;
+    this.nearby.clear(); // les abonnements seront recréés par la proximité
     this.layer?.classList.add('hidden');
   }
 }

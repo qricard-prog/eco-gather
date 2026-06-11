@@ -43,9 +43,9 @@ export default class GameScene extends Phaser.Scene {
     // Média (LiveKit) — connexion paresseuse : on ne rejoint la room
     // que lorsqu'au moins un participant est à portée (économie de minutes).
     this.media = null;
-    this.mediaStarted = false;
-    this.mediaToken = null; // { url, token } récupéré une fois, réutilisé
+    this.mediaToken = null; // { url, token }, rafraîchi à chaque (re)connexion
     this.mediaDisconnectTimer = null;
+    this._tokenFetching = false;
   }
 
   create() {
@@ -60,6 +60,9 @@ export default class GameScene extends Phaser.Scene {
     this.fx = this.add.graphics().setDepth(5);
     this.cameras.main.startFollow(this.player, true, 0.12, 0.12);
 
+    this.connOverlay = document.getElementById('conn-overlay');
+    this.connMsg = document.getElementById('conn-msg');
+
     this.setupInput();
     this.buildHud();
     this.connectNetwork();
@@ -67,6 +70,7 @@ export default class GameScene extends Phaser.Scene {
 
     // Coupe proprement les connexions quand la scène s'arrête.
     this.events.once('shutdown', () => {
+      clearTimeout(this._wakeTimer);
       this.cancelMediaDisconnect();
       this.media?.disconnect();
       this.socket?.disconnect();
@@ -412,22 +416,38 @@ export default class GameScene extends Phaser.Scene {
   // ---------------------------------------------------------------- réseau
 
   connectNetwork() {
+    this.showConnecting("Connexion à l'espace…");
     this.socket = connect();
 
+    // Vaut aussi pour les RECONNEXIONS : on repart d'un monde propre, on
+    // re-rejoint, et on rafraîchit le token média (l'identité = id socket,
+    // qui change à chaque reconnexion).
     this.socket.on('connect', () => {
       this.online = true;
+      this.clearConnecting();
+      this.resetWorld();
       this.socket.emit('join', {
         pseudo: this.pseudo,
         color: this.custom.color,
         hat: this.custom.hat,
         dog: this.custom.dog,
       });
-      this.startMedia();
+      this.refreshMediaToken();
     });
 
     this.socket.on('disconnect', () => {
       this.online = false;
+      this.showConnecting('Reconnexion…');
+      // Le média est lié à l'ancien id : on le coupe et on forcera un nouveau token.
+      this.cancelMediaDisconnect();
+      this.media?.disconnect();
+      this.mediaToken = null;
     });
+
+    // Si la (re)connexion traîne, c'est probablement le réveil du serveur gratuit.
+    this.socket.io.on('reconnect_attempt', () =>
+      this.showConnecting('Reconnexion…')
+    );
 
     // Identité assignée par le serveur + participants déjà présents.
     this.socket.on('init', ({ you, players }) => {
@@ -550,25 +570,59 @@ export default class GameScene extends Phaser.Scene {
     });
   }
 
-  // Prépare la couche média : récupère le token (n'utilise PAS de minutes,
-  // c'est juste un appel HTTP), mais ne rejoint pas encore la room LiveKit.
-  // La connexion réelle est paresseuse (voir ensureMediaConnected).
-  startMedia() {
-    if (this.mediaStarted) return;
-    this.mediaStarted = true;
+  // Détruit les avatars distants (et leur chien/bulle) pour repartir d'un état
+  // propre — appelé à chaque (re)connexion. Le joueur local est conservé.
+  resetWorld() {
+    this.others.forEach((o) => {
+      o.container.getData('dogC')?.destroy();
+      const b = o.container.getData('bubble');
+      if (b) {
+        b.timer?.remove();
+        b.obj.destroy();
+        this.bubbles.delete(b);
+      }
+      o.container.destroy();
+    });
+    this.others.clear();
+    this.nearby = [];
+  }
+
+  // Récupère un token média pour l'id socket courant (n'utilise PAS de minutes :
+  // c'est un simple appel HTTP). La connexion à la room reste paresseuse.
+  refreshMediaToken() {
+    if (this._tokenFetching) return;
+    this._tokenFetching = true;
     const id = this.socket.id;
     fetch(`/token?identity=${encodeURIComponent(id)}&name=${encodeURIComponent(this.pseudo)}`)
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error('token indisponible'))))
       .then(({ token, url }) => {
-        this.media = new LiveKitMedia();
+        if (!this.media) this.media = new LiveKitMedia();
         this.mediaToken = { url, token };
-        // Si quelqu'un est déjà à portée à l'arrivée, on se connecte tout de suite.
+        // Quelqu'un déjà à portée (ex. reconnexion en pleine conversation) → on rejoint.
         if (this.nearbyRemoteCount() > 0) this.ensureMediaConnected();
       })
-      .catch((e) => {
-        console.info('[media] désactivé :', e?.message || e);
-        this.media = null;
+      .catch((e) => console.info('[media] désactivé :', e?.message || e))
+      .finally(() => {
+        this._tokenFetching = false;
       });
+  }
+
+  // ----- Overlay de connexion / réveil du serveur -----
+
+  showConnecting(msg) {
+    if (!this.connOverlay) return;
+    this.connMsg.textContent = msg;
+    this.connOverlay.classList.remove('hidden');
+    clearTimeout(this._wakeTimer);
+    // Au-delà de quelques secondes, c'est très probablement le réveil du dyno gratuit.
+    this._wakeTimer = setTimeout(() => {
+      this.connMsg.textContent = '⏳ Réveil du serveur… (le service gratuit peut mettre ~1 min)';
+    }, 4500);
+  }
+
+  clearConnecting() {
+    clearTimeout(this._wakeTimer);
+    this.connOverlay?.classList.add('hidden');
   }
 
   // Nombre de participants réseau actuellement dans la bulle de proximité.

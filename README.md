@@ -113,7 +113,18 @@ que le serveur sert en production. HTTPS et WebSocket sont gérés par l'héberg
 4. Déployer → l'app est en ligne en HTTPS (ex : `https://eco-gather.onrender.com`).
 
 > Le tier gratuit Render met le service en veille après ~15 min d'inactivité
-> (1er chargement ~50 s au réveil). Sans incidence pour une démo interne.
+> (1er chargement ~50 s au réveil). Un **overlay de connexion** s'affiche pendant
+> ce réveil et lors des reconnexions réseau. Pour éviter les mises en veille,
+> on peut « garder au chaud » le service avec un ping `/health` toutes les ~10 min
+> (cron gratuit type UptimeRobot / cron-job.org).
+
+### Résilience réseau
+La (re)connexion est idempotente : à chaque `connect` (premier ou reconnexion
+auto après coupure), le client repart d'un monde propre, re-rejoint et
+**rafraîchit son token média** (l'identité = id socket, qui change à la
+reconnexion). Le média est coupé pendant la coupure et se rebranche par
+proximité au retour. Un overlay informe l'utilisateur (`Reconnexion…` →
+`Réveil du serveur…`).
 
 Build command : `npm install && npm run build` · Start command : `node server/index.js`
 (Render fournit `PORT` automatiquement.)
