@@ -29,6 +29,21 @@ et ton compagnon. L'avatar garde sa bouille ronde avec ses petits yeux direction
 
 ### Danse 🕺
 Touche `X` : l'avatar danse (~2,5 s de déhanché + 🎶), visible par tout le monde.
+**À 3+ danseurs réunis : pluie de confettis !** 🎉
+
+### Vie de bureau ✨
+- **Profil mémorisé** : pseudo, couleur, accessoire et compagnon sont retenus
+  d'une visite à l'autre (localStorage).
+- **Machine à café** (coin café) : `E` → ton avatar tient un ☕ pendant 20 s
+  et gagne **+35 % de vitesse**. Visible par les autres.
+- **Nourrir les canards** (étang) : `E` → miettes de pain, les canards
+  accourent en cancanant, puis rentrent au bercail.
+
+### Salle de réunion privée 🔒
+La salle de réunion est **étanche** : tous ceux à l'intérieur sont en
+conversation entre eux (quelle que soit la distance), et **isolés** du reste de
+l'espace — quelqu'un collé à la cloison côté open-space n'entend rien.
+Le bandeau bas indique « 🔒 Salle de réunion privée ».
 
 ### Étape 2 ✅ — multijoueur positions
 - Serveur **Node + Express + Socket.io** (`server/index.js`), état **en mémoire**
@@ -96,6 +111,7 @@ pseudos différents.
 | Écrire dans le chat | `Entrée` |
 | Réagir (émote) | `1` à `6` |
 | Danser | `X` |
+| Interagir (café ☕ / canards 🦆) | `E` |
 | Régler le rayon de proximité | `[` (réduire) / `]` (agrandir) |
 | Afficher/masquer sa bulle de proximité | `P` |
 

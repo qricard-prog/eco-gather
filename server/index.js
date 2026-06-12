@@ -155,6 +155,18 @@ io.on('connection', (socket) => {
     if (players.has(socket.id)) socket.broadcast.emit('dance', { id: socket.id });
   });
 
+  // Café : l'avatar tient un ☕ (et gagne un petit boost côté client).
+  socket.on('coffee', () => {
+    if (players.has(socket.id)) socket.broadcast.emit('coffee', { id: socket.id });
+  });
+
+  // Nourrissage des canards : chaque client rejoue la scène au même endroit.
+  socket.on('feed', ({ x, y } = {}) => {
+    if (!players.has(socket.id)) return;
+    if (typeof x !== 'number' || typeof y !== 'number') return;
+    socket.broadcast.emit('feed', { x, y });
+  });
+
   socket.on('disconnect', () => {
     const p = players.get(socket.id);
     players.delete(socket.id);

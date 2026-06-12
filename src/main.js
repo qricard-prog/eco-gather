@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import GameScene from './scenes/GameScene.js';
-import { WORLD, COLORS, AVATAR_COLORS, PETS } from './config.js';
+import { WORLD, COLORS, AVATAR_COLORS, HATS, PETS } from './config.js';
 
 // Le jeu n'est lancé qu'une fois le pseudo saisi (écran d'accueil HTML).
 function startGame(pseudo, custom) {
@@ -83,6 +83,35 @@ petsEl.querySelectorAll('.chip').forEach((chip) => {
     drawPreview();
   });
 });
+
+// --- Profil mémorisé : pseudo + avatar restaurés d'une visite à l'autre ---
+const PROFILE_KEY = 'eco-profile';
+
+function syncUIFromCustom() {
+  [...swatchesEl.querySelectorAll('.swatch')].forEach((b, i) =>
+    b.classList.toggle('sel', AVATAR_COLORS[i] === custom.color)
+  );
+  hatsEl.querySelectorAll('.chip').forEach((c) =>
+    c.classList.toggle('sel', c.dataset.hat === custom.hat)
+  );
+  petsEl.querySelectorAll('.chip').forEach((c) =>
+    c.classList.toggle('sel', c.dataset.pet === custom.pet)
+  );
+  drawPreview();
+}
+
+try {
+  const saved = JSON.parse(localStorage.getItem(PROFILE_KEY) || 'null');
+  if (saved) {
+    if (typeof saved.pseudo === 'string') input.value = saved.pseudo.slice(0, 16);
+    if (AVATAR_COLORS.includes(saved.color)) custom.color = saved.color;
+    if (HATS.includes(saved.hat)) custom.hat = saved.hat;
+    if (saved.pet === 'none' || PETS.some((p) => p.id === saved.pet)) custom.pet = saved.pet;
+    syncUIFromCustom();
+  }
+} catch {
+  /* profil corrompu : on repart de zéro */
+}
 
 // --- Aperçu de l'avatar (même style que le rendu Phaser en jeu) ---
 function drawPreview() {
@@ -226,6 +255,7 @@ input.focus();
 
 function enter() {
   const pseudo = (input.value || '').trim() || 'Moi';
+  localStorage.setItem(PROFILE_KEY, JSON.stringify({ pseudo, ...custom }));
   intro.classList.add('hidden');
   startGame(pseudo, { ...custom });
 }

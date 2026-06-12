@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { WORLD, PLAYER, PROXIMITY, COLORS, PETS } from '../config.js';
+import { WORLD, PLAYER, PROXIMITY, COLORS, PETS, AVATAR_COLORS } from '../config.js';
 import { connect } from '../net.js';
 import { LiveKitMedia } from '../media.js';
 import { Social, EMOTES } from '../social.js';
@@ -29,6 +29,13 @@ export default class GameScene extends Phaser.Scene {
     this.typing = false; // vrai quand on écrit dans le chat (gèle le déplacement)
     this.myColor = this.custom?.color ?? COLORS.player;
     this.bubbles = new Set(); // bulles de chat à repositionner chaque frame
+    this.attachments = new Set(); // objets accrochés à un avatar (☕…)
+
+    // Vie de bureau
+    this.coffeeUntil = 0; // boost café en cours jusqu'à cet instant
+    this.feedCooldown = 0;
+    this._confettiCd = 0;
+    this.ducks = [];
 
     // Autres participants (réseau), indexés par id socket.
     this.others = new Map();
@@ -60,6 +67,19 @@ export default class GameScene extends Phaser.Scene {
 
     this.fx = this.add.graphics().setDepth(5);
     this.cameras.main.startFollow(this.player, true, 0.12, 0.12);
+
+    // Indication contextuelle d'interaction (☕ / 🦆), suit le joueur.
+    this.hintText = this.add
+      .text(0, 0, '', {
+        fontFamily: 'system-ui, sans-serif',
+        fontSize: '12px',
+        color: '#11161d',
+        backgroundColor: '#eef4f8',
+        padding: { x: 8, y: 4 },
+      })
+      .setOrigin(0.5, 1)
+      .setDepth(40)
+      .setVisible(false);
 
     this.connOverlay = document.getElementById('conn-overlay');
     this.connMsg = document.getElementById('conn-msg');
@@ -373,10 +393,12 @@ export default class GameScene extends Phaser.Scene {
     this.addEmoji(510, 250, '🎸', 30, 1);
     this.addEmoji(340, 235, '🐈', 26, 1); // le chat du bureau, en sieste
 
-    // ---- Étang : canards (l'eau bloque le passage) ----
+    // ---- Étang : canards interactifs (l'eau bloque le passage) ----
     this.addBlockerCircle(250, 800, 76);
-    this.addEmoji(225, 785, '🦆', 26, 1);
-    this.addEmoji(300, 830, '🦆', 18, 1);
+    this.ducks = [
+      { obj: this.addEmoji(225, 785, '🦆', 26, 1), home: { x: 225, y: 785 }, target: { x: 225, y: 785 } },
+      { obj: this.addEmoji(300, 830, '🦆', 18, 1), home: { x: 300, y: 830 }, target: { x: 300, y: 830 } },
+    ];
 
     // ---- Table de ping-pong ----
     shadow(760, 868, 220, 22);
@@ -668,6 +690,20 @@ export default class GameScene extends Phaser.Scene {
       const o = this.others.get(id);
       if (o) this.startDance(o.container);
     });
+
+    // Café d'un autre participant (☕ visible sur son avatar).
+    this.socket.on('coffee', ({ id }) => {
+      const o = this.others.get(id);
+      if (o) {
+        this.attachCoffee(o.container, 20000);
+        this.spawnEmote(o.container, '☕');
+      }
+    });
+
+    // Quelqu'un nourrit les canards : on rejoue la même scène.
+    this.socket.on('feed', (p) => {
+      if (typeof p?.x === 'number' && typeof p?.y === 'number') this.doFeed(p);
+    });
   }
 
   // Lance la danse d'un avatar (~2,6 s) ; l'animation est jouée dans
@@ -675,6 +711,155 @@ export default class GameScene extends Phaser.Scene {
   startDance(container) {
     container.setData('danceUntil', this.time.now + 2600);
     this.spawnEmote(container, '🎶');
+  }
+
+  // ------------------------------------------------- interactions (touche E)
+
+  COFFEE = { x: 1239, y: 783, range: 90 };
+  POND = { x: 250, y: 800, feedRange: 200 };
+  ROOM = { x: 1068, y: 380 }; // intérieur : x > ROOM.x && y < ROOM.y
+
+  // La salle de réunion est privée : tous ceux à l'intérieur sont en
+  // conversation entre eux, et isolés du reste de l'espace.
+  inMeetingRoom(x, y) {
+    return x > this.ROOM.x && y < this.ROOM.y;
+  }
+
+  nearCoffee() {
+    return (
+      Phaser.Math.Distance.Between(this.player.x, this.player.y, this.COFFEE.x, this.COFFEE.y) <
+      this.COFFEE.range
+    );
+  }
+
+  nearPond() {
+    const d = Phaser.Math.Distance.Between(this.player.x, this.player.y, this.POND.x, this.POND.y);
+    return d < this.POND.feedRange && d > 70; // pas les pieds dans l'eau
+  }
+
+  tryInteract() {
+    if (this.typing) return;
+    if (this.nearCoffee()) this.drinkCoffee();
+    else if (this.nearPond()) this.tryFeed();
+  }
+
+  // ----- Café : ☕ en main + boost de vitesse 20 s -----
+
+  drinkCoffee() {
+    if (this.time.now < this.coffeeUntil) return; // déjà un café en main
+    this.coffeeUntil = this.time.now + 20000;
+    this.attachCoffee(this.player, 20000);
+    this.spawnEmote(this.player, '☕');
+    this.socket?.emit('coffee');
+  }
+
+  // Accroche un ☕ à un avatar (objet niveau scène, suivi dans updateFloaters).
+  attachCoffee(container, duration) {
+    const obj = this.add
+      .text(container.x + 22, container.y - 16, '☕', { fontSize: '15px' })
+      .setOrigin(0.5)
+      .setDepth(29);
+    const entry = { owner: container, obj, dx: 22, dy: -16 };
+    this.attachments.add(entry);
+    this.time.delayedCall(duration, () => {
+      obj.destroy();
+      this.attachments.delete(entry);
+    });
+  }
+
+  // ----- Canards : miettes + accourue + retour au bercail -----
+
+  tryFeed() {
+    if (this.time.now < this.feedCooldown) return;
+    this.feedCooldown = this.time.now + 8000;
+    const p = this.feedPoint(this.player.x, this.player.y);
+    this.doFeed(p);
+    this.socket?.emit('feed', p);
+  }
+
+  // Point de nourrissage : sur la berge, du côté du joueur.
+  feedPoint(x, y) {
+    const dx = x - this.POND.x;
+    const dy = y - this.POND.y;
+    const len = Math.hypot(dx, dy) || 1;
+    return {
+      x: Math.round(this.POND.x + (dx / len) * 105),
+      y: Math.round(this.POND.y + (dy / len) * 64),
+    };
+  }
+
+  doFeed({ x, y }) {
+    // Miettes de pain
+    for (let i = 0; i < 6; i++) {
+      const c = this.add
+        .circle(x + (Math.random() * 36 - 18), y + (Math.random() * 24 - 12), 2.2, 0xd9c9a0)
+        .setDepth(1);
+      this.tweens.add({ targets: c, alpha: 0, delay: 5200, duration: 800, onComplete: () => c.destroy() });
+    }
+    // Les canards accourent en cancanant, puis rentrent au bercail.
+    this.ducks.forEach((d, i) => {
+      d.target = { x: x + (i ? 20 : -14), y: y + (i ? 12 : -6) };
+      const quack = this.add
+        .text(d.obj.x, d.obj.y - 18, 'coin !', {
+          fontSize: '11px',
+          color: '#cfe0ee',
+          backgroundColor: '#0d141ccc',
+          padding: { x: 4, y: 2 },
+        })
+        .setOrigin(0.5, 1)
+        .setDepth(30);
+      this.tweens.add({ targets: quack, y: quack.y - 14, alpha: 0, duration: 1500, onComplete: () => quack.destroy() });
+    });
+    this.time.delayedCall(6500, () => {
+      this.ducks.forEach((d) => {
+        d.target = { ...d.home };
+      });
+    });
+  }
+
+  updateDucks() {
+    this.ducks.forEach((d) => {
+      d.obj.x = Phaser.Math.Linear(d.obj.x, d.target.x, 0.045);
+      d.obj.y = Phaser.Math.Linear(d.obj.y, d.target.y, 0.045);
+      const dx = d.target.x - d.obj.x;
+      if (Math.abs(dx) > 1.5) d.obj.scaleX = dx > 0 ? -1 : 1; // l'emoji regarde à gauche
+    });
+  }
+
+  // ----- Confettis quand on danse à 3+ au même endroit -----
+
+  maybeConfetti(time) {
+    if (time < this._confettiCd) return;
+    const dancers = [];
+    if ((this.player.getData('danceUntil') || 0) > time) dancers.push(this.player);
+    this.others.forEach((o) => {
+      if ((o.container.getData('danceUntil') || 0) > time) dancers.push(o.container);
+    });
+    if (dancers.length < 3) return;
+    const cx = dancers.reduce((s, c) => s + c.x, 0) / dancers.length;
+    const cy = dancers.reduce((s, c) => s + c.y, 0) / dancers.length;
+    if (!dancers.every((c) => Phaser.Math.Distance.Between(c.x, c.y, cx, cy) < 220)) return;
+    this._confettiCd = time + 4000;
+    this.confettiBurst(cx, cy - 30);
+  }
+
+  confettiBurst(x, y) {
+    for (let i = 0; i < 40; i++) {
+      const r = this.add
+        .rectangle(x, y, 5, 8, AVATAR_COLORS[i % AVATAR_COLORS.length])
+        .setDepth(35);
+      r.angle = Math.random() * 360;
+      this.tweens.add({
+        targets: r,
+        x: x + (Math.random() * 280 - 140),
+        y: y + 40 + Math.random() * 160,
+        angle: r.angle + (Math.random() * 540 - 270),
+        alpha: 0,
+        duration: 1000 + Math.random() * 600,
+        ease: 'Cubic.easeOut',
+        onComplete: () => r.destroy(),
+      });
+    }
   }
 
   // ----------------------------------------------------------- chat / émotes
@@ -746,7 +931,7 @@ export default class GameScene extends Phaser.Scene {
     });
   }
 
-  // Fait suivre les bulles de chat à leur avatar.
+  // Fait suivre les bulles de chat et les objets accrochés (☕) à leur avatar.
   updateFloaters() {
     this.bubbles.forEach((b) => {
       if (!b.owner.active) {
@@ -756,6 +941,14 @@ export default class GameScene extends Phaser.Scene {
         return;
       }
       b.obj.setPosition(b.owner.x, b.owner.y - (PLAYER.radius + 14));
+    });
+    this.attachments.forEach((a) => {
+      if (!a.owner.active) {
+        a.obj.destroy();
+        this.attachments.delete(a);
+        return;
+      }
+      a.obj.setPosition(a.owner.x + a.dx, a.owner.y + a.dy);
     });
   }
 
@@ -902,6 +1095,7 @@ export default class GameScene extends Phaser.Scene {
       this.startDance(this.player);
       this.socket?.emit('dance');
     });
+    this.input.keyboard.on('keydown-E', () => this.tryInteract());
     ['ONE', 'TWO', 'THREE', 'FOUR', 'FIVE', 'SIX'].forEach((key, i) => {
       this.input.keyboard.on(`keydown-${key}`, () => {
         if (this.typing || !EMOTES[i]) return;
@@ -954,8 +1148,25 @@ export default class GameScene extends Phaser.Scene {
     this.interpolateRemotes();
     this.animateAvatars(time);
     this.updateFloaters();
+    this.updateDucks();
+    this.maybeConfetti(time);
     this.updateProximity();
+    this.updateHint();
     this.updateHud();
+  }
+
+  // Indication contextuelle « E : … » près des points d'interaction.
+  updateHint() {
+    let text = '';
+    if (this.nearCoffee() && this.time.now >= this.coffeeUntil) text = '☕ E : prendre un café';
+    else if (this.nearPond() && this.time.now >= this.feedCooldown) text = '🦆 E : nourrir les canards';
+    if (text) {
+      this.hintText.setText(text);
+      this.hintText.setPosition(this.player.x, this.player.y - (PLAYER.radius + 34));
+      this.hintText.setVisible(true);
+    } else {
+      this.hintText.setVisible(false);
+    }
   }
 
   // Met à jour direction du regard + rebond/respiration de chaque avatar,
@@ -991,9 +1202,11 @@ export default class GameScene extends Phaser.Scene {
     if (this.cursors.up.isDown || this.keys.z.isDown) vy -= 1;
     if (this.cursors.down.isDown || this.keys.s.isDown) vy += 1;
 
+    // Boost café : +35 % de vitesse tant que le ☕ est en main.
+    const speed = this.time.now < this.coffeeUntil ? PLAYER.speed * 1.35 : PLAYER.speed;
     const v = new Phaser.Math.Vector2(vx, vy);
     if (v.lengthSq() > 0) {
-      v.normalize().scale(PLAYER.speed);
+      v.normalize().scale(speed);
       this.facing.copy(v).normalize();
     }
     body.setVelocity(v.x, v.y);
@@ -1029,8 +1242,9 @@ export default class GameScene extends Phaser.Scene {
     const px = this.player.x;
     const py = this.player.y;
     const r = this.proximityRadius;
+    const myIn = this.inMeetingRoom(px, py);
 
-    if (this.showBubble) {
+    if (this.showBubble && !myIn) {
       this.fx.lineStyle(2, COLORS.bubble, 0.35);
       this.fx.strokeCircle(px, py, r);
     }
@@ -1039,7 +1253,11 @@ export default class GameScene extends Phaser.Scene {
     this.others.forEach((o) => {
       const bx = o.container.x;
       const by = o.container.y;
-      const inRange = Phaser.Math.Distance.Between(px, py, bx, by) <= r;
+      // Salle de réunion privée : tous ceux à l'intérieur sont en conversation
+      // entre eux quelle que soit la distance, et isolés de l'extérieur.
+      const oIn = this.inMeetingRoom(bx, by);
+      const inRange =
+        myIn || oIn ? myIn && oIn : Phaser.Math.Distance.Between(px, py, bx, by) <= r;
 
       if (inRange) {
         this.nearby.push(o.name);
@@ -1080,12 +1298,20 @@ export default class GameScene extends Phaser.Scene {
     this.hud.setText(
       [
         `${this.pseudo}  ·  ${net}${media}`,
-        `ZQSD/flèches  ·  Chat : ⏎  ·  Émotes : 1-6  ·  Danse : X  ·  Bulle : P  ·  Rayon : [ ]`,
+        `ZQSD/flèches  ·  Chat : ⏎  ·  Émotes : 1-6  ·  Danse : X  ·  Action : E  ·  Bulle : P`,
       ].join('\n')
     );
 
     this.status.setY(this.scale.height - 44);
-    if (this.nearby.length) {
+    const inRoom = this.inMeetingRoom(this.player.x, this.player.y);
+    if (inRoom) {
+      this.status.setColor('#9bb8e8');
+      this.status.setText(
+        this.nearby.length
+          ? `🔒 Salle de réunion privée — avec : ${this.nearby.join(', ')}`
+          : '🔒 Salle de réunion privée — seul pour l\'instant'
+      );
+    } else if (this.nearby.length) {
       this.status.setColor('#36c98f');
       this.status.setText(`🟢 En conversation avec : ${this.nearby.join(', ')}`);
     } else {
