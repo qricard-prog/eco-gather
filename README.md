@@ -39,11 +39,22 @@ Touche `X` : l'avatar danse (~2,5 s de déhanché + 🎶), visible par tout le m
 - **Nourrir les canards** (étang) : `E` → miettes de pain, les canards
   accourent en cancanant, puis rentrent au bercail.
 
-### Salle de réunion privée 🔒
-La salle de réunion est **étanche** : tous ceux à l'intérieur sont en
-conversation entre eux (quelle que soit la distance), et **isolés** du reste de
-l'espace — quelqu'un collé à la cloison côté open-space n'entend rien.
-Le bandeau bas indique « 🔒 Salle de réunion privée ».
+### Salles de réunion privées 🔒
+**Trois salles à thème**, toutes étanches : tous ceux à l'intérieur d'une même
+salle sont en conversation entre eux (quelle que soit la distance), et
+**isolés** du reste — y compris des autres salles. Le bandeau bas indique
+« 🔒 Salle … (privée) ».
+- **Conseil** (haut droite) — la classique : grande table, 8 chaises, écran mural ;
+- **Jungle** 🌿 (gauche) — sol végétal, table basse bambou, coussins, plantes,
+  un singe 🐒 et sa banane ;
+- **Cosmos** 🚀 (droite) — nuit étoilée, console de bord lumineuse, planète à
+  anneau, fusée et petit alien 👾.
+
+### Stand de hot-dogs 🌭
+Près du ping-pong : `E` → tu manges un hot-dog et ton avatar **grossit**
+(+18 % par hot-dog, jusqu'à un respectable +60 %). Quelques secondes après la
+dernière bouchée, tu **fonds doucement** jusqu'à ta ligne d'origine. Visible
+par tout le monde, évidemment.
 
 ### Étape 2 ✅ — multijoueur positions
 - Serveur **Node + Express + Socket.io** (`server/index.js`), état **en mémoire**
@@ -111,7 +122,7 @@ pseudos différents.
 | Écrire dans le chat | `Entrée` |
 | Réagir (émote) | `1` à `6` |
 | Danser | `X` |
-| Interagir (café ☕ / canards 🦆) | `E` |
+| Interagir (café ☕ / hot-dog 🌭 / canards 🦆) | `E` |
 | Régler le rayon de proximité | `[` (réduire) / `]` (agrandir) |
 | Afficher/masquer sa bulle de proximité | `P` |
 

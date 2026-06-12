@@ -34,6 +34,7 @@ export default class GameScene extends Phaser.Scene {
     // Vie de bureau
     this.coffeeUntil = 0; // boost café en cours jusqu'à cet instant
     this.feedCooldown = 0;
+    this.eatCooldown = 0;
     this._confettiCd = 0;
     this.ducks = [];
 
@@ -184,6 +185,33 @@ export default class GameScene extends Phaser.Scene {
       }
     }
 
+    // Salle Jungle : sol végétal avec taches de feuillage
+    g.fillStyle(0x21402e, 1);
+    g.fillRect(24, 400, 356, 280);
+    g.fillStyle(0x1b3526, 0.9);
+    [
+      [80, 450, 70, 34], [200, 430, 56, 26], [320, 470, 64, 30],
+      [120, 560, 80, 36], [280, 580, 70, 32], [70, 640, 54, 24], [330, 630, 48, 22],
+    ].forEach(([x, y, w, h]) => g.fillEllipse(x, y, w, h));
+
+    // Salle Cosmos : nuit étoilée + planète
+    g.fillStyle(0x101728, 1);
+    g.fillRect(1180, 388, 396, 302);
+    for (let i = 0; i < 46; i++) {
+      const sx = 1192 + ((i * 89) % 372);
+      const sy = 398 + ((i * 53) % 282);
+      g.fillStyle(i % 5 === 0 ? 0x8fb8ff : 0xdfe8ff, i % 3 === 0 ? 0.8 : 0.45);
+      g.fillCircle(sx, sy, i % 7 === 0 ? 1.8 : 1);
+    }
+    g.fillStyle(0x5b4a8f, 1); // planète
+    g.fillCircle(1492, 622, 22);
+    g.fillStyle(0x6e5cac, 1);
+    g.fillCircle(1486, 616, 14);
+    g.lineStyle(3, 0x8d7ac4, 0.8); // anneau
+    g.strokeEllipse(1492, 624, 64, 18);
+    g.fillStyle(0xb8c4e8, 1); // petite lune
+    g.fillCircle(1250, 640, 7);
+
     // Tapis de la zone détente (deux tons + liseré)
     const rug = this.add.graphics().setDepth(-9);
     rug.fillStyle(0x2c3a50, 1);
@@ -228,9 +256,11 @@ export default class GameScene extends Phaser.Scene {
 
     // Étiquettes de zones
     this.addZoneLabel(795, 374, 'OPEN-SPACE');
-    this.addZoneLabel(1320, 354, 'RÉUNION');
+    this.addZoneLabel(1320, 354, 'SALLE CONSEIL');
     this.addZoneLabel(1330, 734, 'CAFÉ');
     this.addZoneLabel(280, 330, 'DÉTENTE');
+    this.addZoneLabel(202, 656, 'SALLE JUNGLE');
+    this.addZoneLabel(1380, 666, 'SALLE COSMOS');
   }
 
   // Mur avec biseau (haut/gauche clair, bas/droite sombre) — léger relief.
@@ -256,10 +286,19 @@ export default class GameScene extends Phaser.Scene {
       { x: w / 2, y: h - WALL / 2, w, h: WALL },
       { x: WALL / 2, y: h / 2, w: WALL, h },
       { x: w - WALL / 2, y: h / 2, w: WALL, h },
-      // Salle de réunion (cloison gauche avec porte, cloison basse pleine)
+      // Salle Conseil (cloison gauche avec porte, cloison basse pleine)
       { x: 1060, y: 117, w: 16, h: 186 },
       { x: 1060, y: 335, w: 16, h: 90 },
       { x: 1318, y: 380, w: 516, h: 16 },
+      // Salle Jungle (haut + bas pleins, porte à droite)
+      { x: 202, y: 400, w: 356, h: 16 },
+      { x: 202, y: 680, w: 356, h: 16 },
+      { x: 380, y: 455, w: 16, h: 110 },
+      { x: 380, y: 625, w: 16, h: 110 },
+      // Salle Cosmos (toit = cloison basse du Conseil ; porte à gauche, bas plein)
+      { x: 1180, y: 449, w: 16, h: 122 },
+      { x: 1180, y: 630, w: 16, h: 120 },
+      { x: 1378, y: 690, w: 396, h: 16 },
     ];
     const g = this.add.graphics().setDepth(2);
     segs.forEach((s) => {
@@ -413,9 +452,78 @@ export default class GameScene extends Phaser.Scene {
     this.addEmoji(650, 770, '🏓', 22, 2);
     this.addBlocker(760, 830, 210, 110);
 
-    // ---- Plantes vertes ----
+    // ---- Salle Jungle : table basse bambou, coussins, végétation ----
+    shadow(202, 565, 120, 18);
+    g.fillStyle(0x8a7a48, 1);
+    g.fillRoundedRect(147, 510, 110, 60, 12);
+    g.fillStyle(0x9d8d58, 1);
+    g.fillRoundedRect(154, 515, 96, 46, 9);
+    this.addBlocker(202, 540, 110, 60);
     [
-      [1020, 100], [600, 100], [80, 930], [1530, 440], [1520, 925],
+      [120, 500], [285, 500], [120, 600], [285, 600],
+    ].forEach(([cx, cy]) => {
+      sh.fillStyle(0x000000, 0.2);
+      sh.fillEllipse(cx, cy + 8, 26, 9);
+      g.fillStyle(0x3f5d35, 1);
+      g.fillCircle(cx, cy, 11);
+      g.fillStyle(0x4d7041, 1);
+      g.fillCircle(cx, cy - 1, 7);
+    });
+    [
+      [70, 440], [330, 435], [70, 640], [330, 650],
+    ].forEach(([x, y]) => this.drawPlant(sh, g, top, x, y));
+    this.addEmoji(120, 418, '🌿', 18, 1);
+    this.addEmoji(280, 418, '🌿', 18, 1);
+    this.addEmoji(320, 560, '🐒', 24, 1);
+    this.addEmoji(296, 575, '🍌', 14, 1);
+
+    // ---- Salle Cosmos : console de bord, sièges, copains de l'espace ----
+    shadow(1380, 575, 150, 20);
+    g.fillStyle(0x1c2436, 1);
+    g.fillRoundedRect(1310, 505, 140, 70, 12);
+    g.fillStyle(0x232e47, 1);
+    g.fillRoundedRect(1317, 510, 126, 56, 9);
+    top.lineStyle(2, 0x4a6fd6, 0.9);
+    top.strokeRoundedRect(1310, 505, 140, 70, 12);
+    top.fillStyle(0x4a6fd6, 0.85); // écrans de la console
+    top.fillRoundedRect(1330, 522, 30, 18, 3);
+    top.fillRoundedRect(1370, 522, 30, 18, 3);
+    top.fillStyle(0x36c98f, 0.9);
+    top.fillRoundedRect(1410, 522, 18, 18, 3);
+    this.addBlocker(1380, 540, 140, 70);
+    [
+      [1310, 470], [1450, 470], [1310, 610], [1450, 610],
+    ].forEach(([cx, cy]) => this.drawChair(sh, g, cx, cy));
+    this.addEmoji(1225, 425, '🚀', 26, 1);
+    this.addEmoji(1545, 415, '🪐', 22, 1);
+    this.addEmoji(1525, 540, '👾', 20, 1);
+
+    // ---- Stand de hot-dogs (E pour manger… et grossir) ----
+    shadow(980, 886, 130, 18);
+    g.fillStyle(0xb3392e, 1); // chariot
+    g.fillRoundedRect(922, 838, 116, 48, 9);
+    g.fillStyle(0xd9d3c8, 1);
+    g.fillRoundedRect(929, 843, 102, 15, 5);
+    g.fillStyle(0x8a2b22, 1); // roues
+    g.fillCircle(944, 888, 7);
+    g.fillCircle(1016, 888, 7);
+    top.fillStyle(0x6b4f3a, 1); // mât du parasol
+    top.fillRect(977, 796, 5, 44);
+    // parasol rayé
+    top.fillStyle(0xe8e2d6, 1);
+    top.fillCircle(980, 798, 26);
+    top.fillStyle(0xc4453a, 1);
+    [180, 252, 324].forEach((deg) => {
+      top.slice(980, 798, 26, Phaser.Math.DegToRad(deg), Phaser.Math.DegToRad(deg + 36));
+      top.fillPath();
+    });
+    this.addEmoji(980, 866, '🌭', 18, 2);
+    this.addBlocker(980, 862, 120, 52);
+
+    // ---- Plantes vertes (dont quelques-unes dans l'open-space) ----
+    [
+      [1020, 100], [600, 100], [80, 930], [1520, 925],
+      [520, 330], [520, 505], [1055, 505],
     ].forEach(([x, y]) => this.drawPlant(sh, g, top, x, y));
 
     // ---- Petites touches drôles ----
@@ -567,17 +675,28 @@ export default class GameScene extends Phaser.Scene {
     faceG.x = dir.x * 4.5;
     faceG.y = dir.y * 4.5 - 1;
 
+    // Hot-dogs : embonpoint temporaire, qui fond après quelques secondes.
+    let fat = container.getData('fat') || 0;
+    if (fat > 0 && time > (container.getData('fatAt') || 0) + 2500) {
+      fat = Math.max(0, fat - 0.005);
+      container.setData('fat', fat);
+    }
+    const girth = 1 + fat * 0.5; // jusqu'à ~+60 % de tour de taille
+
     // Danse : gros rebond + déhanché + petit squash, prioritaire sur le reste.
     if ((container.getData('danceUntil') || 0) > time) {
       const bounce = Math.abs(Math.sin(t * 11 + phase)) * 7;
       bodyG.y = -bounce;
       bodyG.angle = Math.sin(t * 9 + phase) * 16;
-      bodyG.setScale(1 + Math.sin(t * 18 + phase) * 0.06, 1 - Math.sin(t * 18 + phase) * 0.06);
-      shadow.setScale(1 - bounce * 0.03, 1 - bounce * 0.03);
+      bodyG.setScale(
+        girth * (1 + Math.sin(t * 18 + phase) * 0.06),
+        girth * (1 - Math.sin(t * 18 + phase) * 0.06)
+      );
+      shadow.setScale(girth * (1 - bounce * 0.03), girth * (1 - bounce * 0.03));
       return;
     }
     bodyG.angle = 0;
-    bodyG.setScale(1, 1);
+    bodyG.setScale(girth, girth);
 
     // Rebond / respiration
     let bob;
@@ -587,7 +706,7 @@ export default class GameScene extends Phaser.Scene {
       bob = (Math.sin(t * 2.4 + phase) + 1) * 0.55;
     }
     bodyG.y = -bob;
-    const s = 1 - bob * 0.02;
+    const s = (1 - bob * 0.02) * girth;
     shadow.setScale(s, s);
   }
 
@@ -704,6 +823,12 @@ export default class GameScene extends Phaser.Scene {
     this.socket.on('feed', (p) => {
       if (typeof p?.x === 'number' && typeof p?.y === 'number') this.doFeed(p);
     });
+
+    // Quelqu'un mange un hot-dog : il grossit aussi chez nous.
+    this.socket.on('eat', ({ id }) => {
+      const o = this.others.get(id);
+      if (o) this.applyEat(o.container);
+    });
   }
 
   // Lance la danse d'un avatar (~2,6 s) ; l'animation est jouée dans
@@ -717,12 +842,18 @@ export default class GameScene extends Phaser.Scene {
 
   COFFEE = { x: 1239, y: 783, range: 90 };
   POND = { x: 250, y: 800, feedRange: 200 };
-  ROOM = { x: 1068, y: 380 }; // intérieur : x > ROOM.x && y < ROOM.y
+  HOTDOG = { x: 980, y: 860, range: 95 };
 
-  // La salle de réunion est privée : tous ceux à l'intérieur sont en
-  // conversation entre eux, et isolés du reste de l'espace.
-  inMeetingRoom(x, y) {
-    return x > this.ROOM.x && y < this.ROOM.y;
+  // Salles de réunion privées : tous ceux à l'intérieur d'une même salle sont
+  // en conversation entre eux, et isolés du reste de l'espace.
+  ROOMS = [
+    { name: 'Conseil', x1: 1068, y1: 0, x2: 1600, y2: 380 },
+    { name: 'Jungle', x1: 24, y1: 400, x2: 380, y2: 680 },
+    { name: 'Cosmos', x1: 1180, y1: 380, x2: 1600, y2: 690 },
+  ];
+
+  roomAt(x, y) {
+    return this.ROOMS.find((r) => x > r.x1 && x < r.x2 && y > r.y1 && y < r.y2) || null;
   }
 
   nearCoffee() {
@@ -737,10 +868,33 @@ export default class GameScene extends Phaser.Scene {
     return d < this.POND.feedRange && d > 70; // pas les pieds dans l'eau
   }
 
+  nearHotdog() {
+    return (
+      Phaser.Math.Distance.Between(this.player.x, this.player.y, this.HOTDOG.x, this.HOTDOG.y) <
+      this.HOTDOG.range
+    );
+  }
+
   tryInteract() {
     if (this.typing) return;
     if (this.nearCoffee()) this.drinkCoffee();
+    else if (this.nearHotdog()) this.eatHotdog();
     else if (this.nearPond()) this.tryFeed();
+  }
+
+  // ----- Hot-dogs : plus on mange, plus on grossit (ça redescend tout seul) -----
+
+  eatHotdog() {
+    if (this.time.now < this.eatCooldown) return;
+    this.eatCooldown = this.time.now + 700;
+    this.applyEat(this.player);
+    this.socket?.emit('eat');
+  }
+
+  applyEat(container) {
+    container.setData('fat', Math.min((container.getData('fat') || 0) + 0.18, 1.2));
+    container.setData('fatAt', this.time.now);
+    this.spawnEmote(container, '🌭');
   }
 
   // ----- Café : ☕ en main + boost de vitesse 20 s -----
@@ -1159,6 +1313,7 @@ export default class GameScene extends Phaser.Scene {
   updateHint() {
     let text = '';
     if (this.nearCoffee() && this.time.now >= this.coffeeUntil) text = '☕ E : prendre un café';
+    else if (this.nearHotdog() && this.time.now >= this.eatCooldown) text = '🌭 E : manger un hot-dog';
     else if (this.nearPond() && this.time.now >= this.feedCooldown) text = '🦆 E : nourrir les canards';
     if (text) {
       this.hintText.setText(text);
@@ -1242,9 +1397,9 @@ export default class GameScene extends Phaser.Scene {
     const px = this.player.x;
     const py = this.player.y;
     const r = this.proximityRadius;
-    const myIn = this.inMeetingRoom(px, py);
+    const myRoom = this.roomAt(px, py);
 
-    if (this.showBubble && !myIn) {
+    if (this.showBubble && !myRoom) {
       this.fx.lineStyle(2, COLORS.bubble, 0.35);
       this.fx.strokeCircle(px, py, r);
     }
@@ -1253,11 +1408,11 @@ export default class GameScene extends Phaser.Scene {
     this.others.forEach((o) => {
       const bx = o.container.x;
       const by = o.container.y;
-      // Salle de réunion privée : tous ceux à l'intérieur sont en conversation
-      // entre eux quelle que soit la distance, et isolés de l'extérieur.
-      const oIn = this.inMeetingRoom(bx, by);
+      // Salles privées : en conversation si on est dans la MÊME salle (quelle
+      // que soit la distance) ; sinon, isolés dès que l'un des deux est en salle.
+      const oRoom = this.roomAt(bx, by);
       const inRange =
-        myIn || oIn ? myIn && oIn : Phaser.Math.Distance.Between(px, py, bx, by) <= r;
+        myRoom || oRoom ? myRoom === oRoom : Phaser.Math.Distance.Between(px, py, bx, by) <= r;
 
       if (inRange) {
         this.nearby.push(o.name);
@@ -1303,13 +1458,13 @@ export default class GameScene extends Phaser.Scene {
     );
 
     this.status.setY(this.scale.height - 44);
-    const inRoom = this.inMeetingRoom(this.player.x, this.player.y);
-    if (inRoom) {
+    const room = this.roomAt(this.player.x, this.player.y);
+    if (room) {
       this.status.setColor('#9bb8e8');
       this.status.setText(
         this.nearby.length
-          ? `🔒 Salle de réunion privée — avec : ${this.nearby.join(', ')}`
-          : '🔒 Salle de réunion privée — seul pour l\'instant'
+          ? `🔒 Salle ${room.name} (privée) — avec : ${this.nearby.join(', ')}`
+          : `🔒 Salle ${room.name} (privée) — seul pour l'instant`
       );
     } else if (this.nearby.length) {
       this.status.setColor('#36c98f');

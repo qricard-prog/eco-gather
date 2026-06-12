@@ -167,6 +167,11 @@ io.on('connection', (socket) => {
     socket.broadcast.emit('feed', { x, y });
   });
 
+  // Hot-dog : l'avatar de l'émetteur grossit chez tout le monde.
+  socket.on('eat', () => {
+    if (players.has(socket.id)) socket.broadcast.emit('eat', { id: socket.id });
+  });
+
   socket.on('disconnect', () => {
     const p = players.get(socket.id);
     players.delete(socket.id);
