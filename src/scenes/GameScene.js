@@ -36,6 +36,7 @@ export default class GameScene extends Phaser.Scene {
     this.coffeeUntil = 0; // boost café en cours jusqu'à cet instant
     this.feedCooldown = 0;
     this.eatCooldown = 0;
+    this.flexCooldown = 0;
     this._confettiCd = 0;
     this.ducks = [];
 
@@ -62,9 +63,11 @@ export default class GameScene extends Phaser.Scene {
     this.cameras.main.setBounds(0, 0, WORLD.width, WORLD.height);
 
     this.blockers = []; // zones physiques invisibles (murs + mobilier)
+    this.blockerGeom = []; // mêmes obstacles, en géométrie (pour le pathfinding)
     this.drawFloor();
     this.buildWalls();
     this.buildFurniture();
+    this.buildNavGrid();
     this.createPlayer();
 
     this.fx = this.add.graphics().setDepth(5);
@@ -134,6 +137,7 @@ export default class GameScene extends Phaser.Scene {
     const z = this.add.zone(x, y, w, h);
     this.physics.add.existing(z, true);
     this.blockers.push(z);
+    this.blockerGeom.push({ type: 'rect', x, y, w, h });
     return z;
   }
 
@@ -142,7 +146,138 @@ export default class GameScene extends Phaser.Scene {
     this.physics.add.existing(z, true);
     z.body.setCircle(r);
     this.blockers.push(z);
+    this.blockerGeom.push({ type: 'circle', x, y, r });
     return z;
+  }
+
+  // ------------------------------------------------------- pathfinding (A*)
+
+  // Un point est bloqué s'il est à moins de `m` d'un obstacle (marge = rayon
+  // du joueur, pour garder le dégagement nécessaire au passage).
+  pointBlocked(x, y, m = PLAYER.radius) {
+    return this.blockerGeom.some((g) =>
+      g.type === 'rect'
+        ? x > g.x - g.w / 2 - m &&
+          x < g.x + g.w / 2 + m &&
+          y > g.y - g.h / 2 - m &&
+          y < g.y + g.h / 2 + m
+        : Phaser.Math.Distance.Between(x, y, g.x, g.y) < g.r + m
+    );
+  }
+
+  // Ligne de vue dégagée entre deux points (pour lisser le chemin).
+  clearLine(x0, y0, x1, y1) {
+    const steps = Math.ceil(Phaser.Math.Distance.Between(x0, y0, x1, y1) / 8);
+    for (let i = 0; i <= steps; i++) {
+      const t = i / steps;
+      if (this.pointBlocked(x0 + (x1 - x0) * t, y0 + (y1 - y0) * t)) return false;
+    }
+    return true;
+  }
+
+  // Grille d'occupation : 1 = bloqué. Cellules ~24 px.
+  buildNavGrid() {
+    const cell = 24;
+    const cols = Math.ceil(WORLD.width / cell);
+    const rows = Math.ceil(WORLD.height / cell);
+    const blocked = new Uint8Array(cols * rows);
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        const x = c * cell + cell / 2;
+        const y = r * cell + cell / 2;
+        if (this.pointBlocked(x, y)) blocked[r * cols + c] = 1;
+      }
+    }
+    this.nav = { cell, cols, rows, blocked };
+  }
+
+  navFree(c, r) {
+    const n = this.nav;
+    return c >= 0 && c < n.cols && r >= 0 && r < n.rows && !n.blocked[r * n.cols + c];
+  }
+
+  // Cellule libre la plus proche (recherche en spirale) si on tombe sur un mur.
+  nearestFree(c, r) {
+    if (this.navFree(c, r)) return { c, r };
+    for (let rad = 1; rad < 24; rad++) {
+      for (let dc = -rad; dc <= rad; dc++) {
+        for (let dr = -rad; dr <= rad; dr++) {
+          if (Math.abs(dc) !== rad && Math.abs(dr) !== rad) continue;
+          if (this.navFree(c + dc, r + dr)) return { c: c + dc, r: r + dr };
+        }
+      }
+    }
+    return null;
+  }
+
+  // A* 8-directions ; renvoie une liste de points (monde) lissée, ou null.
+  findPath(sx, sy, tx, ty) {
+    const n = this.nav;
+    const toCol = (x) => Phaser.Math.Clamp(Math.floor(x / n.cell), 0, n.cols - 1);
+    const toRow = (y) => Phaser.Math.Clamp(Math.floor(y / n.cell), 0, n.rows - 1);
+    let s = this.nearestFree(toCol(sx), toRow(sy));
+    const t = this.nearestFree(toCol(tx), toRow(ty));
+    if (!s || !t) return null;
+
+    const key = (c, r) => r * n.cols + c;
+    const open = [{ c: s.c, r: s.r, f: 0 }];
+    const came = new Map();
+    const g = new Map([[key(s.c, s.r), 0]]);
+    const h = (c, r) => Math.hypot(c - t.c, r - t.r);
+    const dirs = [
+      [1, 0], [-1, 0], [0, 1], [0, -1],
+      [1, 1], [1, -1], [-1, 1], [-1, -1],
+    ];
+    let found = false;
+    while (open.length) {
+      open.sort((a, b) => a.f - b.f);
+      const cur = open.shift();
+      if (cur.c === t.c && cur.r === t.r) {
+        found = true;
+        break;
+      }
+      for (const [dc, dr] of dirs) {
+        const nc = cur.c + dc;
+        const nr = cur.r + dr;
+        if (!this.navFree(nc, nr)) continue;
+        // Pas de coupe de coin en diagonale
+        if (dc !== 0 && dr !== 0 && (!this.navFree(cur.c + dc, cur.r) || !this.navFree(cur.c, cur.r + dr)))
+          continue;
+        const ng = (g.get(key(cur.c, cur.r)) ?? Infinity) + (dc && dr ? 1.414 : 1);
+        if (ng < (g.get(key(nc, nr)) ?? Infinity)) {
+          g.set(key(nc, nr), ng);
+          came.set(key(nc, nr), { c: cur.c, r: cur.r });
+          open.push({ c: nc, r: nr, f: ng + h(nc, nr) });
+        }
+      }
+    }
+    if (!found) return null;
+
+    // Reconstruit le chemin (cellules → centres monde)
+    const cells = [];
+    let k = key(t.c, t.r);
+    let cur = { c: t.c, r: t.r };
+    while (k !== key(s.c, s.r)) {
+      cells.unshift(cur);
+      cur = came.get(k);
+      if (!cur) break;
+      k = key(cur.c, cur.r);
+    }
+    const pts = cells.map((cc) => ({ x: cc.c * n.cell + n.cell / 2, y: cc.r * n.cell + n.cell / 2 }));
+    pts.push({ x: tx, y: ty }); // point exact visé en bout de course
+
+    // Lissage par ligne de vue (string-pulling)
+    const start = { x: sx, y: sy };
+    const all = [start, ...pts];
+    const out = [];
+    let i = 0;
+    while (i < all.length - 1) {
+      let j = all.length - 1;
+      while (j > i + 1 && !this.clearLine(all[i].x, all[i].y, all[j].x, all[j].y)) j--;
+      out.push(all[j]);
+      i = j;
+    }
+    return out;
   }
 
   drawFloor() {
@@ -527,6 +662,30 @@ export default class GameScene extends Phaser.Scene {
       [520, 330], [520, 505], [1055, 505],
     ].forEach(([x, y]) => this.drawPlant(sh, g, top, x, y));
 
+    // ---- Coin haltères (E pour soulever… et bomber les biceps) ----
+    const gx = this.GYM.x;
+    const gy = this.GYM.y;
+    top.fillStyle(0x232c38, 1); // tapis de sol
+    top.fillRoundedRect(gx - 46, gy + 8, 92, 34, 8);
+    top.lineStyle(2, 0x3a4658, 0.8);
+    top.strokeRoundedRect(gx - 46, gy + 8, 92, 34, 8);
+    const drawDumbbell = (dx, dy) => {
+      sh.fillStyle(0x000000, 0.22);
+      sh.fillEllipse(dx, dy + 7, 34, 8);
+      g.fillStyle(0x2c3a4a, 1); // barre
+      g.fillRoundedRect(dx - 15, dy - 3, 30, 6, 2);
+      g.fillStyle(0x44586e, 1); // poids
+      g.fillCircle(dx - 16, dy, 8);
+      g.fillCircle(dx + 16, dy, 8);
+      g.fillStyle(0x55698a, 1);
+      g.fillCircle(dx - 16, dy, 4);
+      g.fillCircle(dx + 16, dy, 4);
+    };
+    drawDumbbell(gx - 18, gy + 22);
+    drawDumbbell(gx + 20, gy + 26);
+    this.addEmoji(gx, gy - 2, '🏋️', 22, 2);
+    this.addBlocker(gx, gy + 25, 92, 26);
+
     // ---- Petites touches drôles ----
     this.addEmoji(1000, 945, '🚧', 22, 1);
     this.addEmoji(545, 940, '🛹', 22, 1);
@@ -546,6 +705,12 @@ export default class GameScene extends Phaser.Scene {
 
     // Corps animable (rebond / respiration)
     const bodyG = this.add.container(0, 0);
+
+    // Bras musclés (cachés par défaut, ajoutés sous le disque pour ne dépasser
+    // qu'à l'extérieur). Apparaissent quand on soulève des haltères.
+    const armL = this.makeArm(-1);
+    const armR = this.makeArm(1);
+
     const disc = this.add.circle(0, 0, r, color);
     disc.setStrokeStyle(3, 0xffffff, 0.9);
     const highlight = this.add.ellipse(0, -r * 0.4, r * 1.1, r * 0.85, 0xffffff, 0.16);
@@ -558,7 +723,7 @@ export default class GameScene extends Phaser.Scene {
     const pupR = this.add.circle(5, -1, 1.5, 0x12202c);
     faceG.add([eyeL, eyeR, pupL, pupR]);
 
-    bodyG.add([disc, highlight, faceG]);
+    bodyG.add([armL, armR, disc, highlight, faceG]);
     this.addHat(bodyG, faceG, opts.hat);
 
     const label = this.add
@@ -579,8 +744,24 @@ export default class GameScene extends Phaser.Scene {
     container.setData('label', label);
     container.setData('phase', Math.random() * Math.PI * 2);
     container.setData('dir', { x: 0, y: 1 });
+    container.setData('arms', [armL, armR]);
     container.setSize(r * 2, r * 2);
     return container;
+  }
+
+  // Un bras musclé (épaule + gros biceps + poing), masqué tant qu'on ne
+  // soulève pas de fonte. `side` = -1 (gauche) ou +1 (droite).
+  makeArm(side) {
+    const r = PLAYER.radius;
+    const arm = this.add.container(side * (r - 1), 4);
+    const shoulder = this.add.ellipse(0, 6, 9, 13, 0xdca579);
+    const bicep = this.add.ellipse(side * 5, -3, 15, 14, 0xe8b88c);
+    bicep.setStrokeStyle(2, 0xc98f63, 0.7);
+    const fist = this.add.circle(side * 8, -11, 5, 0xdca579);
+    arm.add([shoulder, bicep, fist]);
+    arm.setVisible(false);
+    arm.setData('bicep', bicep);
+    return arm;
   }
 
   // Accessoire de tête, dessiné dans le groupe « corps » (suit le rebond).
@@ -684,6 +865,11 @@ export default class GameScene extends Phaser.Scene {
     }
     const girth = 1 + fat * 0.5; // jusqu'à ~+60 % de tour de taille
 
+    // Bras musclés : visibles seulement pendant qu'on soulève des haltères.
+    const arms = container.getData('arms');
+    const flexing = (container.getData('muscleUntil') || 0) > time;
+    if (arms) arms.forEach((a) => a.setVisible(flexing));
+
     // Danse : gros rebond + déhanché + petit squash, prioritaire sur le reste.
     if ((container.getData('danceUntil') || 0) > time) {
       const bounce = Math.abs(Math.sin(t * 11 + phase)) * 7;
@@ -698,6 +884,18 @@ export default class GameScene extends Phaser.Scene {
     }
     bodyG.angle = 0;
     bodyG.setScale(girth, girth);
+
+    // Haltères : on bombe les biceps en rythme + petite poussée du corps.
+    if (flexing) {
+      const pump = 1 + Math.abs(Math.sin(t * 12 + phase)) * 0.4;
+      arms.forEach((a) => {
+        a.getData('bicep').setScale(pump, pump);
+        a.y = 4 - (pump - 1) * 10;
+      });
+      bodyG.y = -Math.abs(Math.sin(t * 12 + phase)) * 2.5;
+      shadow.setScale(girth, girth);
+      return;
+    }
 
     // Rebond / respiration
     let bob;
@@ -830,6 +1028,12 @@ export default class GameScene extends Phaser.Scene {
       const o = this.others.get(id);
       if (o) this.applyEat(o.container);
     });
+
+    // Quelqu'un soulève des haltères : il bombe les biceps chez nous aussi.
+    this.socket.on('flex', ({ id }) => {
+      const o = this.others.get(id);
+      if (o) this.applyFlex(o.container);
+    });
   }
 
   // Lance la danse d'un avatar (~2,6 s) ; l'animation est jouée dans
@@ -844,6 +1048,7 @@ export default class GameScene extends Phaser.Scene {
   COFFEE = { x: 1239, y: 783, range: 90 };
   POND = { x: 250, y: 800, feedRange: 200 };
   HOTDOG = { x: 980, y: 860, range: 95 };
+  GYM = { x: 480, y: 745, range: 90 };
 
   // Salles de réunion privées : tous ceux à l'intérieur d'une même salle sont
   // en conversation entre eux, et isolés du reste de l'espace.
@@ -876,11 +1081,33 @@ export default class GameScene extends Phaser.Scene {
     );
   }
 
+  nearGym() {
+    return (
+      Phaser.Math.Distance.Between(this.player.x, this.player.y, this.GYM.x, this.GYM.y) <
+      this.GYM.range
+    );
+  }
+
   tryInteract() {
     if (this.typing) return;
     if (this.nearCoffee()) this.drinkCoffee();
+    else if (this.nearGym()) this.liftWeights();
     else if (this.nearHotdog()) this.eatHotdog();
     else if (this.nearPond()) this.tryFeed();
+  }
+
+  // ----- Haltères : on bombe les biceps quelques secondes -----
+
+  liftWeights() {
+    if (this.time.now < this.flexCooldown) return;
+    this.flexCooldown = this.time.now + 500;
+    this.applyFlex(this.player);
+    this.socket?.emit('flex');
+  }
+
+  applyFlex(container) {
+    container.setData('muscleUntil', this.time.now + 2800);
+    this.spawnEmote(container, '💪');
   }
 
   // ----- Hot-dogs : plus on mange, plus on grossit (ça redescend tout seul) -----
@@ -1262,12 +1489,15 @@ export default class GameScene extends Phaser.Scene {
           24;
       if (now - (this._lastClickAt || 0) < 350 && near) {
         const wp = pointer.positionToCamera(this.cameras.main);
-        this.moveTarget = {
-          x: Phaser.Math.Clamp(wp.x, 36, WORLD.width - 36),
-          y: Phaser.Math.Clamp(wp.y, 36, WORLD.height - 36),
-        };
-        this._mtSample = null;
-        this.spawnClickMarker(this.moveTarget.x, this.moveTarget.y);
+        const tx = Phaser.Math.Clamp(wp.x, 36, WORLD.width - 36);
+        const ty = Phaser.Math.Clamp(wp.y, 36, WORLD.height - 36);
+        // Chemin qui contourne murs et meubles (A*).
+        const path = this.findPath(this.player.x, this.player.y, tx, ty);
+        if (path && path.length) {
+          this.path = path;
+          this._mtSample = null;
+          this.spawnClickMarker(tx, ty);
+        }
         this._lastClickAt = 0;
       } else {
         this._lastClickAt = now;
@@ -1351,6 +1581,7 @@ export default class GameScene extends Phaser.Scene {
   updateHint() {
     let text = '';
     if (this.nearCoffee() && this.time.now >= this.coffeeUntil) text = '☕ E : prendre un café';
+    else if (this.nearGym() && this.time.now >= this.flexCooldown) text = '🏋️ E : soulever des haltères';
     else if (this.nearHotdog() && this.time.now >= this.eatCooldown) text = '🌭 E : manger un hot-dog';
     else if (this.nearPond() && this.time.now >= this.feedCooldown) text = '🦆 E : nourrir les canards';
     if (text) {
@@ -1386,7 +1617,7 @@ export default class GameScene extends Phaser.Scene {
     // Pendant la saisie du chat, l'avatar ne bouge pas.
     if (this.typing) {
       body.setVelocity(0, 0);
-      this.moveTarget = null;
+      this.path = null;
       return;
     }
     let vx = 0;
@@ -1402,12 +1633,12 @@ export default class GameScene extends Phaser.Scene {
     const v = new Phaser.Math.Vector2(vx, vy);
     if (v.lengthSq() > 0) {
       // Le clavier reprend la main et annule le déplacement automatique.
-      this.moveTarget = null;
+      this.path = null;
       v.normalize().scale(speed);
       this.facing.copy(v).normalize();
       body.setVelocity(v.x, v.y);
-    } else if (this.moveTarget) {
-      this.stepToTarget(body, speed);
+    } else if (this.path && this.path.length) {
+      this.stepAlongPath(body, speed);
     } else {
       body.setVelocity(0, 0);
     }
@@ -1415,27 +1646,30 @@ export default class GameScene extends Phaser.Scene {
     this.maybeSendPosition();
   }
 
-  // Avance vers la cible du double-clic ; s'arrête à l'arrivée ou si bloqué.
-  stepToTarget(body, speed) {
-    const dx = this.moveTarget.x - this.player.x;
-    const dy = this.moveTarget.y - this.player.y;
-    const dist = Math.hypot(dx, dy);
-    if (dist < 6) {
-      this.moveTarget = null;
-      body.setVelocity(0, 0);
-      return;
+  // Suit le chemin calculé (waypoints), avance vers le prochain point.
+  stepAlongPath(body, speed) {
+    let wp = this.path[0];
+    const arriveThreshold = this.path.length > 1 ? 10 : 6;
+    if (Phaser.Math.Distance.Between(this.player.x, this.player.y, wp.x, wp.y) < arriveThreshold) {
+      this.path.shift();
+      if (!this.path.length) {
+        body.setVelocity(0, 0);
+        return;
+      }
+      wp = this.path[0];
     }
-    const dir = new Phaser.Math.Vector2(dx, dy).normalize();
+    const dir = new Phaser.Math.Vector2(wp.x - this.player.x, wp.y - this.player.y).normalize();
     this.facing.copy(dir);
     body.setVelocity(dir.x * speed, dir.y * speed);
 
-    // Anti-blocage : si on n'a pas avancé (mur sur le chemin), on abandonne.
+    // Filet de sécurité anti-blocage (au cas où un coin accrocherait).
     const now = this.time.now;
     if (!this._mtSample) this._mtSample = { t: now, x: this.player.x, y: this.player.y };
-    else if (now - this._mtSample.t > 450) {
-      const progressed = Math.hypot(this.player.x - this._mtSample.x, this.player.y - this._mtSample.y) > 4;
+    else if (now - this._mtSample.t > 600) {
+      const progressed =
+        Math.hypot(this.player.x - this._mtSample.x, this.player.y - this._mtSample.y) > 4;
       if (!progressed) {
-        this.moveTarget = null;
+        this.path = null;
         body.setVelocity(0, 0);
       }
       this._mtSample = null;

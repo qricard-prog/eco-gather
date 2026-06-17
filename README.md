@@ -56,6 +56,15 @@ Près du ping-pong : `E` → tu manges un hot-dog et ton avatar **grossit**
 dernière bouchée, tu **fonds doucement** jusqu'à ta ligne d'origine. Visible
 par tout le monde, évidemment.
 
+### Coin haltères 🏋️
+À gauche de l'open-space : `E` → ton avatar sort les **gros biceps** qui pompent
+quelques secondes (💪). Visible par tout le monde aussi.
+
+### Déplacement au clic 🖱️
+Double-clic n'importe où → l'avatar s'y rend tout seul en **contournant murs et
+mobilier** (pathfinding A\* sur une grille de navigation, chemin lissé par ligne
+de vue). Les flèches/ZQSD reprennent la main à tout moment.
+
 ### Étape 2 ✅ — multijoueur positions
 - Serveur **Node + Express + Socket.io** (`server/index.js`), état **en mémoire**
   (pas de base de données, réinitialisé au redémarrage).
@@ -121,11 +130,11 @@ pseudos différents.
 | Action | Touches |
 | --- | --- |
 | Se déplacer | Flèches ou `Z` `Q` `S` `D` |
-| Aller à un endroit | **Double-clic** sur la carte |
+| Aller à un endroit | **Double-clic** sur la carte (contourne les obstacles) |
 | Écrire dans le chat | `Entrée` |
 | Réagir (émote) | `1` à `6` |
 | Danser | `X` |
-| Interagir (café ☕ / hot-dog 🌭 / canards 🦆) | `E` |
+| Interagir (café ☕ / hot-dog 🌭 / haltères 🏋️ / canards 🦆) | `E` |
 | Régler le rayon de proximité | `[` (réduire) / `]` (agrandir) |
 | Afficher/masquer sa bulle de proximité | `P` |
 
