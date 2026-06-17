@@ -60,12 +60,12 @@ export class LiveKitMedia {
     this.connecting = false;
     this.layer.classList.remove('hidden');
 
-    // Publie micro + caméra par défaut (la 1re fois déclenche la demande de permission).
+    // On publie le micro, mais PAS la caméra par défaut (vie privée + bande
+    // passante). Chacun active sa caméra d'un clic sur le bouton 🎥.
     try {
       await this.room.localParticipant.setMicrophoneEnabled(true);
-      await this.room.localParticipant.setCameraEnabled(true);
     } catch (e) {
-      console.warn('[media] micro/caméra indisponibles :', e?.message || e);
+      console.warn('[media] micro indisponible :', e?.message || e);
     }
     this.refreshControls();
     // Réapplique les sources choisies la dernière fois, puis remplit les sélecteurs.

@@ -74,9 +74,11 @@ par tout le monde, évidemment.
   délai de grâce) dès qu'on se retrouve seul. Seul dans son coin = **0 minute
   consommée**, et la caméra s'éteint physiquement. Le HUD indique l'état (`💤 en veille`
   / `🎥 actif`).
-- Connexion LiveKit avec `autoSubscribe: false` : on publie son micro + sa caméra,
-  mais on ne **souscrit** qu'aux participants **proches** (piloté par la proximité).
-  Quand on s'éloigne → désabonnement automatique (bande passante préservée).
+- Connexion LiveKit avec `autoSubscribe: false` : on publie son **micro**, la
+  **caméra reste coupée par défaut** (vie privée + bande passante) et s'active d'un
+  clic 🎥. On ne **souscrit** qu'aux participants **proches** (piloté par la
+  proximité) ; quand on s'éloigne → désabonnement automatique.
+- **Petit son** (chime) quand quelqu'un entre dans ta bulle de conversation.
 - Identité LiveKit = id Socket.io → la proximité « jeu » pilote directement le média.
 - Vignettes vidéo des personnes proches + self-view, indicateur de personne qui parle.
 - Barre de contrôles : 🎤 micro, 🎥 caméra, 🖥️ partage d'écran.
@@ -119,6 +121,7 @@ pseudos différents.
 | Action | Touches |
 | --- | --- |
 | Se déplacer | Flèches ou `Z` `Q` `S` `D` |
+| Aller à un endroit | **Double-clic** sur la carte |
 | Écrire dans le chat | `Entrée` |
 | Réagir (émote) | `1` à `6` |
 | Danser | `X` |

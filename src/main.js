@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import GameScene from './scenes/GameScene.js';
 import { WORLD, COLORS, AVATAR_COLORS, HATS, PETS } from './config.js';
+import { unlockAudio } from './sound.js';
 
 // Le jeu n'est lancé qu'une fois le pseudo saisi (écran d'accueil HTML).
 function startGame(pseudo, custom) {
@@ -256,6 +257,7 @@ input.focus();
 function enter() {
   const pseudo = (input.value || '').trim() || 'Moi';
   localStorage.setItem(PROFILE_KEY, JSON.stringify({ pseudo, ...custom }));
+  unlockAudio(); // débloque l'audio (geste utilisateur requis par le navigateur)
   intro.classList.add('hidden');
   startGame(pseudo, { ...custom });
 }

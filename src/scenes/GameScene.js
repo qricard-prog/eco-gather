@@ -3,6 +3,7 @@ import { WORLD, PLAYER, PROXIMITY, COLORS, PETS, AVATAR_COLORS } from '../config
 import { connect } from '../net.js';
 import { LiveKitMedia } from '../media.js';
 import { Social, EMOTES } from '../social.js';
+import { playJoinChime } from '../sound.js';
 
 const WALL = 24; // épaisseur des murs du périmètre
 const SEND_INTERVAL = 60; // ms entre deux envois de position au serveur
@@ -1250,6 +1251,30 @@ export default class GameScene extends Phaser.Scene {
       this.socket?.emit('dance');
     });
     this.input.keyboard.on('keydown-E', () => this.tryInteract());
+
+    // Double-clic sur la carte : l'avatar marche tout seul vers ce point.
+    this.input.on('pointerdown', (pointer) => {
+      if (this.typing) return;
+      const now = this.time.now;
+      const near =
+        this._lastClickPos &&
+        Phaser.Math.Distance.Between(pointer.x, pointer.y, this._lastClickPos.x, this._lastClickPos.y) <
+          24;
+      if (now - (this._lastClickAt || 0) < 350 && near) {
+        const wp = pointer.positionToCamera(this.cameras.main);
+        this.moveTarget = {
+          x: Phaser.Math.Clamp(wp.x, 36, WORLD.width - 36),
+          y: Phaser.Math.Clamp(wp.y, 36, WORLD.height - 36),
+        };
+        this._mtSample = null;
+        this.spawnClickMarker(this.moveTarget.x, this.moveTarget.y);
+        this._lastClickAt = 0;
+      } else {
+        this._lastClickAt = now;
+        this._lastClickPos = { x: pointer.x, y: pointer.y };
+      }
+    });
+
     ['ONE', 'TWO', 'THREE', 'FOUR', 'FIVE', 'SIX'].forEach((key, i) => {
       this.input.keyboard.on(`keydown-${key}`, () => {
         if (this.typing || !EMOTES[i]) return;
@@ -1265,6 +1290,19 @@ export default class GameScene extends Phaser.Scene {
       PROXIMITY.min,
       PROXIMITY.max
     );
+  }
+
+  // Repère visuel pulsé à l'endroit où l'on a double-cliqué.
+  spawnClickMarker(x, y) {
+    const ring = this.add.circle(x, y, 10, 0x36c98f, 0).setStrokeStyle(3, 0x36c98f, 0.95).setDepth(8);
+    this.tweens.add({
+      targets: ring,
+      scale: 2.2,
+      alpha: 0,
+      duration: 480,
+      ease: 'Cubic.out',
+      onComplete: () => ring.destroy(),
+    });
   }
 
   // ------------------------------------------------------------------- HUD
@@ -1348,6 +1386,7 @@ export default class GameScene extends Phaser.Scene {
     // Pendant la saisie du chat, l'avatar ne bouge pas.
     if (this.typing) {
       body.setVelocity(0, 0);
+      this.moveTarget = null;
       return;
     }
     let vx = 0;
@@ -1359,14 +1398,48 @@ export default class GameScene extends Phaser.Scene {
 
     // Boost café : +35 % de vitesse tant que le ☕ est en main.
     const speed = this.time.now < this.coffeeUntil ? PLAYER.speed * 1.35 : PLAYER.speed;
+
     const v = new Phaser.Math.Vector2(vx, vy);
     if (v.lengthSq() > 0) {
+      // Le clavier reprend la main et annule le déplacement automatique.
+      this.moveTarget = null;
       v.normalize().scale(speed);
       this.facing.copy(v).normalize();
+      body.setVelocity(v.x, v.y);
+    } else if (this.moveTarget) {
+      this.stepToTarget(body, speed);
+    } else {
+      body.setVelocity(0, 0);
     }
-    body.setVelocity(v.x, v.y);
 
     this.maybeSendPosition();
+  }
+
+  // Avance vers la cible du double-clic ; s'arrête à l'arrivée ou si bloqué.
+  stepToTarget(body, speed) {
+    const dx = this.moveTarget.x - this.player.x;
+    const dy = this.moveTarget.y - this.player.y;
+    const dist = Math.hypot(dx, dy);
+    if (dist < 6) {
+      this.moveTarget = null;
+      body.setVelocity(0, 0);
+      return;
+    }
+    const dir = new Phaser.Math.Vector2(dx, dy).normalize();
+    this.facing.copy(dir);
+    body.setVelocity(dir.x * speed, dir.y * speed);
+
+    // Anti-blocage : si on n'a pas avancé (mur sur le chemin), on abandonne.
+    const now = this.time.now;
+    if (!this._mtSample) this._mtSample = { t: now, x: this.player.x, y: this.player.y };
+    else if (now - this._mtSample.t > 450) {
+      const progressed = Math.hypot(this.player.x - this._mtSample.x, this.player.y - this._mtSample.y) > 4;
+      if (!progressed) {
+        this.moveTarget = null;
+        body.setVelocity(0, 0);
+      }
+      this._mtSample = null;
+    }
   }
 
   maybeSendPosition() {
@@ -1433,6 +1506,11 @@ export default class GameScene extends Phaser.Scene {
     o.inRange = true;
     o.circle.setFillStyle(COLORS.botActive);
     this.tweens.add({ targets: o.container, scale: 1.12, duration: 160, ease: 'Back.out' });
+    // Petit son d'entrée en conversation (anti-rafale si plusieurs d'un coup).
+    if (this.time.now - (this._lastChimeAt || 0) > 200) {
+      this._lastChimeAt = this.time.now;
+      playJoinChime();
+    }
     // Participant proche : on rejoint la room (si pas déjà fait) et on s'y abonne.
     this.media?.subscribeTo(o.id);
     this.ensureMediaConnected();
@@ -1453,7 +1531,7 @@ export default class GameScene extends Phaser.Scene {
     this.hud.setText(
       [
         `${this.pseudo}  ·  ${net}${media}`,
-        `ZQSD/flèches  ·  Chat : ⏎  ·  Émotes : 1-6  ·  Danse : X  ·  Action : E  ·  Bulle : P`,
+        `ZQSD/flèches ou double-clic  ·  Chat : ⏎  ·  Émotes : 1-6  ·  Danse : X  ·  Action : E`,
       ].join('\n')
     );
 
