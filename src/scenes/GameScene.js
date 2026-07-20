@@ -376,6 +376,45 @@ export default class GameScene extends Phaser.Scene {
     pond.fillStyle(0x37a566, 1);
     pond.fillCircle(192, 828, 5);
 
+    // Salle Sport : plage de piscine carrelée + couloir de nage
+    g.fillStyle(0x24333d, 1); // plage (carrelage frais)
+    g.fillRect(600, 24, 380, 326);
+    g.fillStyle(0x283a45, 1);
+    const PT = 20;
+    for (let y = 24; y < 350; y += PT) {
+      for (let x = 600 + (Math.floor(y / PT) % 2 === 0 ? 0 : PT); x < 980; x += PT * 2) {
+        g.fillRect(x, y, Math.min(PT, 980 - x), Math.min(PT, 350 - y));
+      }
+    }
+    const pool = this.add.graphics().setDepth(-9);
+    const P = this.POOL;
+    // margelle
+    pool.fillStyle(0xbfc9cf, 1);
+    pool.fillRoundedRect(P.x1 - 8, P.y1 - 8, P.x2 - P.x1 + 16, P.y2 - P.y1 + 16, 10);
+    // eau (deux profondeurs)
+    pool.fillStyle(0x1d6e96, 1);
+    pool.fillRoundedRect(P.x1, P.y1, P.x2 - P.x1, P.y2 - P.y1, 6);
+    pool.fillStyle(0x2a8ab8, 0.85);
+    pool.fillRoundedRect(P.x1 + 6, P.y1 + 6, P.x2 - P.x1 - 12, P.y2 - P.y1 - 12, 5);
+    // lignes de fond des 2 couloirs
+    pool.fillStyle(0x14506e, 0.9);
+    pool.fillRect(P.x1 + 14, 98, P.x2 - P.x1 - 28, 4);
+    pool.fillRect(P.x1 + 14, 158, P.x2 - P.x1 - 28, 4);
+    // ligne d'eau (bouées rouge/blanc) entre les deux couloirs
+    for (let x = P.x1 + 10; x < P.x2 - 8; x += 14) {
+      pool.fillStyle(Math.floor((x - P.x1) / 14) % 2 === 0 ? 0xc4453a : 0xe8e2d6, 1);
+      pool.fillCircle(x, 130, 3.4);
+    }
+    // reflets
+    pool.lineStyle(2, 0x9fd8f2, 0.35);
+    pool.strokeEllipse(720, 112, 90, 22);
+    pool.strokeEllipse(860, 168, 70, 18);
+    // échelle (à droite)
+    pool.lineStyle(3, 0xd9e2e8, 1);
+    pool.lineBetween(P.x2 - 2, 96, P.x2 + 12, 96);
+    pool.lineBetween(P.x2 - 2, 112, P.x2 + 12, 112);
+    pool.lineBetween(P.x2 + 12, 90, P.x2 + 12, 118);
+
     // Vignette douce pour la profondeur
     if (!this.textures.exists('vignette')) {
       const cv = this.textures.createCanvas('vignette', 512, 320);
@@ -399,6 +438,7 @@ export default class GameScene extends Phaser.Scene {
     this.addZoneLabel(280, 330, 'DÉTENTE');
     this.addZoneLabel(202, 656, 'SALLE JUNGLE');
     this.addZoneLabel(1380, 666, 'SALLE COSMOS');
+    this.addZoneLabel(700, 322, 'SALLE SPORT');
   }
 
   // Mur avec biseau (haut/gauche clair, bas/droite sombre) — léger relief.
@@ -437,6 +477,11 @@ export default class GameScene extends Phaser.Scene {
       { x: 1180, y: 449, w: 16, h: 122 },
       { x: 1180, y: 630, w: 16, h: 120 },
       { x: 1378, y: 690, w: 396, h: 16 },
+      // Salle Sport (haut = mur du périmètre ; flancs pleins, porte en bas
+      // à gauche, alignée sur le couloir entre les bureaux)
+      { x: 600, y: 187, w: 16, h: 326 },
+      { x: 980, y: 187, w: 16, h: 326 },
+      { x: 834, y: 350, w: 292, h: 16 },
     ];
     const g = this.add.graphics().setDepth(2);
     segs.forEach((s) => {
@@ -489,7 +534,9 @@ export default class GameScene extends Phaser.Scene {
       { y: 432, chairY: 392 },
       { y: 562, chairY: 602 },
     ].forEach((row) => {
-      [630, 810, 990].forEach((x) => {
+      // Colonnes décalées pour préserver le couloir vers la porte du Conseil
+      // (à droite) et la porte de la salle Sport (au-dessus).
+      [560, 740, 920].forEach((x) => {
         shadow(x, row.y + 28, 118, 18);
         g.fillStyle(0x7a5c42, 1);
         g.fillRoundedRect(x - DESK_W / 2, row.y - DESK_H / 2, DESK_W, DESK_H, 10);
@@ -664,9 +711,39 @@ export default class GameScene extends Phaser.Scene {
 
     // ---- Plantes vertes (dont quelques-unes dans l'open-space) ----
     [
-      [1020, 100], [600, 100], [80, 930], [1520, 925],
+      [545, 100], [80, 930], [1520, 925],
       [520, 330], [520, 505], [1055, 505],
     ].forEach(([x, y]) => this.drawPlant(sh, g, top, x, y));
+
+    // ---- Salle Sport : vélo d'appartement (E pour pédaler = boost) ----
+    const bx = this.BIKE.x;
+    const by = this.BIKE.y;
+    sh.fillStyle(0x000000, 0.25);
+    sh.fillEllipse(bx, by + 16, 62, 12);
+    top.fillStyle(0x232c38, 1); // tapis
+    top.fillRoundedRect(bx - 36, by - 4, 72, 26, 6);
+    // roues
+    g.lineStyle(4, 0x394a5e, 1);
+    g.strokeCircle(bx - 15, by + 6, 10);
+    g.strokeCircle(bx + 15, by + 6, 10);
+    g.fillStyle(0x556a86, 1);
+    g.fillCircle(bx - 15, by + 6, 3);
+    g.fillCircle(bx + 15, by + 6, 3);
+    // cadre + selle + guidon
+    g.lineStyle(4, 0xc4453a, 1);
+    g.lineBetween(bx - 15, by + 6, bx - 2, by - 8);
+    g.lineBetween(bx - 2, by - 8, bx + 15, by + 6);
+    g.lineBetween(bx - 2, by - 8, bx - 12, by - 10);
+    g.fillStyle(0x222a33, 1);
+    g.fillRoundedRect(bx - 18, by - 13, 12, 5, 2); // selle
+    g.lineStyle(3, 0x222a33, 1);
+    g.lineBetween(bx + 12, by - 12, bx + 20, by - 12); // guidon
+    g.lineBetween(bx + 15, by + 6, bx + 16, by - 12);
+    this.addEmoji(bx - 40, by - 16, '🚴', 18, 2);
+    this.addBlocker(bx, by + 2, 66, 34);
+    // Petites touches piscine
+    this.addEmoji(660, 250, '🏊', 20, 1);
+    this.addEmoji(770, 152, '🦆', 15, 1); // le canard en vadrouille
 
     // ---- Coin haltères, adossé au mur du bas (E pour soulever) ----
     const gx = this.GYM.x;
@@ -751,7 +828,10 @@ export default class GameScene extends Phaser.Scene {
       })
       .setOrigin(0.5, 0);
 
-    container.add([shadow, bodyG, label]);
+    // Roues de vélo au sol (cachées par défaut) — visibles pendant le boost.
+    const wheels = this.makeWheels();
+
+    container.add([shadow, wheels, bodyG, label]);
     container.setData('circle', disc);
     container.setData('bodyG', bodyG);
     container.setData('faceG', faceG);
@@ -760,8 +840,26 @@ export default class GameScene extends Phaser.Scene {
     container.setData('phase', Math.random() * Math.PI * 2);
     container.setData('dir', { x: 0, y: 1 });
     container.setData('arms', [armL, armR]);
+    container.setData('wheels', wheels);
     container.setSize(r * 2, r * 2);
     return container;
+  }
+
+  // Paire de roues sous l'avatar (avec rayons), pour le boost vélo.
+  makeWheels() {
+    const r = PLAYER.radius;
+    const w = this.add.container(0, r + 1);
+    [-10, 10].forEach((dx) => {
+      const wheel = this.add.container(dx, 0);
+      const tire = this.add.circle(0, 0, 6.5, 0x10161d).setStrokeStyle(2.5, 0x394a5e);
+      const spoke = this.add.rectangle(0, 0, 11, 2, 0x6b82a3);
+      const spoke2 = this.add.rectangle(0, 0, 2, 11, 0x6b82a3);
+      const hub = this.add.circle(0, 0, 1.8, 0xc4453a);
+      wheel.add([tire, spoke, spoke2, hub]);
+      w.add(wheel);
+    });
+    w.setVisible(false);
+    return w;
   }
 
   // Un bras musclé en pose « flex » (gros biceps bombé + avant-bras + poing
@@ -891,6 +989,34 @@ export default class GameScene extends Phaser.Scene {
     const arms = container.getData('arms');
     const flexing = (container.getData('muscleUntil') || 0) > time;
     if (arms) arms.forEach((a) => a.setVisible(flexing));
+
+    // Vélo : roues visibles qui tournent pendant le boost.
+    const wheels = container.getData('wheels');
+    const riding = (container.getData('bikeUntil') || 0) > time;
+    if (wheels) {
+      wheels.setVisible(riding);
+      if (riding) wheels.each((wheel) => (wheel.angle += moving ? 14 : 4));
+    }
+
+    // Nage : dans le bassin, petites ondulations autour de l'avatar.
+    if (this.inPool(container.x, container.y)) {
+      const lastRip = container.getData('ripAt') || 0;
+      if (time - lastRip > 650) {
+        container.setData('ripAt', time);
+        const rip = this.add
+          .circle(container.x, container.y + 4, 10, 0x9fd8f2, 0)
+          .setStrokeStyle(2, 0x9fd8f2, 0.7)
+          .setDepth(6);
+        this.tweens.add({
+          targets: rip,
+          scale: 2.4,
+          alpha: 0,
+          duration: 900,
+          ease: 'Sine.out',
+          onComplete: () => rip.destroy(),
+        });
+      }
+    }
 
     // Danse : gros rebond + déhanché + petit squash, prioritaire sur le reste.
     if ((container.getData('danceUntil') || 0) > time) {
@@ -1056,6 +1182,12 @@ export default class GameScene extends Phaser.Scene {
       const o = this.others.get(id);
       if (o) this.applyFlex(o.container);
     });
+
+    // Quelqu'un enfourche le vélo : roues visibles chez nous aussi.
+    this.socket.on('bike', ({ id }) => {
+      const o = this.others.get(id);
+      if (o) this.applyBike(o.container);
+    });
   }
 
   // Lance la danse d'un avatar (~2,6 s) ; l'animation est jouée dans
@@ -1071,6 +1203,9 @@ export default class GameScene extends Phaser.Scene {
   POND = { x: 250, y: 800, feedRange: 200 };
   HOTDOG = { x: 980, y: 860, range: 95 };
   GYM = { x: 700, y: 912, range: 95 };
+  BIKE = { x: 880, y: 272, range: 80 };
+  // Bassin du couloir de nage (non bloquant : on y nage, ralenti)
+  POOL = { x1: 635, y1: 70, x2: 945, y2: 190 };
 
   // Salles de réunion privées : tous ceux à l'intérieur d'une même salle sont
   // en conversation entre eux, et isolés du reste de l'espace.
@@ -1078,7 +1213,13 @@ export default class GameScene extends Phaser.Scene {
     { name: 'Conseil', x1: 1068, y1: 0, x2: 1600, y2: 380 },
     { name: 'Jungle', x1: 24, y1: 400, x2: 380, y2: 680 },
     { name: 'Cosmos', x1: 1180, y1: 380, x2: 1600, y2: 690 },
+    { name: 'Sport', x1: 600, y1: 0, x2: 980, y2: 350 },
   ];
+
+  // Dans le bassin ? (position centre de l'avatar)
+  inPool(x, y) {
+    return x > this.POOL.x1 && x < this.POOL.x2 && y > this.POOL.y1 && y < this.POOL.y2;
+  }
 
   roomAt(x, y) {
     return this.ROOMS.find((r) => x > r.x1 && x < r.x2 && y > r.y1 && y < r.y2) || null;
@@ -1110,12 +1251,33 @@ export default class GameScene extends Phaser.Scene {
     );
   }
 
+  nearBike() {
+    return (
+      Phaser.Math.Distance.Between(this.player.x, this.player.y, this.BIKE.x, this.BIKE.y) <
+      this.BIKE.range
+    );
+  }
+
   tryInteract() {
     if (this.typing) return;
     if (this.nearCoffee()) this.drinkCoffee();
+    else if (this.nearBike()) this.rideBike();
     else if (this.nearGym()) this.liftWeights();
     else if (this.nearHotdog()) this.eatHotdog();
     else if (this.nearPond()) this.tryFeed();
+  }
+
+  // ----- Vélo : boost de vitesse, roues sous l'avatar -----
+
+  rideBike() {
+    if ((this.player.getData('bikeUntil') || 0) > this.time.now) return; // déjà en selle
+    this.applyBike(this.player);
+    this.socket?.emit('bike');
+  }
+
+  applyBike(container) {
+    container.setData('bikeUntil', this.time.now + 12000);
+    this.spawnEmote(container, '🚴');
   }
 
   // ----- Haltères : on bombe les biceps quelques secondes -----
@@ -1603,6 +1765,8 @@ export default class GameScene extends Phaser.Scene {
   updateHint() {
     let text = '';
     if (this.nearCoffee() && this.time.now >= this.coffeeUntil) text = '☕ E : prendre un café';
+    else if (this.nearBike() && (this.player.getData('bikeUntil') || 0) <= this.time.now)
+      text = '🚴 E : pédaler (boost de vitesse)';
     else if (this.nearGym() && this.time.now >= this.flexCooldown) text = '🏋️ E : soulever des haltères';
     else if (this.nearHotdog() && this.time.now >= this.eatCooldown) text = '🌭 E : manger un hot-dog';
     else if (this.nearPond() && this.time.now >= this.feedCooldown) text = '🦆 E : nourrir les canards';
@@ -1649,8 +1813,12 @@ export default class GameScene extends Phaser.Scene {
     if (this.cursors.up.isDown || this.keys.z.isDown) vy -= 1;
     if (this.cursors.down.isDown || this.keys.s.isDown) vy += 1;
 
-    // Boost café : +35 % de vitesse tant que le ☕ est en main.
-    const speed = this.time.now < this.coffeeUntil ? PLAYER.speed * 1.35 : PLAYER.speed;
+    // Boosts et malus de vitesse : café +35 %, vélo +65 %, nage -50 %.
+    let mult = 1;
+    if (this.time.now < this.coffeeUntil) mult *= 1.35;
+    if ((this.player.getData('bikeUntil') || 0) > this.time.now) mult *= 1.65;
+    if (this.inPool(this.player.x, this.player.y)) mult *= 0.5;
+    const speed = PLAYER.speed * mult;
 
     const v = new Phaser.Math.Vector2(vx, vy);
     if (v.lengthSq() > 0) {

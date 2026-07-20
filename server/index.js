@@ -177,6 +177,11 @@ io.on('connection', (socket) => {
     if (players.has(socket.id)) socket.broadcast.emit('flex', { id: socket.id });
   });
 
+  // Vélo : les roues du boost apparaissent chez tout le monde.
+  socket.on('bike', () => {
+    if (players.has(socket.id)) socket.broadcast.emit('bike', { id: socket.id });
+  });
+
   socket.on('disconnect', () => {
     const p = players.get(socket.id);
     players.delete(socket.id);

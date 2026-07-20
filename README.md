@@ -56,6 +56,14 @@ Près du ping-pong : `E` → tu manges un hot-dog et ton avatar **grossit**
 dernière bouchée, tu **fonds doucement** jusqu'à ta ligne d'origine. Visible
 par tout le monde, évidemment.
 
+### Salle Sport 🏊🚴
+En haut au centre : une 4ᵉ salle privée avec :
+- un **couloir de nage** (2 lignes, bouées, échelle) — on peut vraiment y nager :
+  la vitesse est divisée par 2 dans l'eau et l'avatar fait des ondulations ;
+- un **vélo d'appartement** : `E` → boost **+65 % de vitesse pendant 12 s**, avec
+  des petites roues qui tournent sous l'avatar 🚴 (visible par tous, cumulable
+  avec le café ☕).
+
 ### Coin haltères 🏋️
 À gauche de l'open-space : `E` → ton avatar sort les **gros biceps** qui pompent
 quelques secondes (💪). Visible par tout le monde aussi.
@@ -134,7 +142,7 @@ pseudos différents.
 | Écrire dans le chat | `Entrée` |
 | Réagir (émote) | `1` à `6` |
 | Danser | `X` |
-| Interagir (café ☕ / hot-dog 🌭 / haltères 🏋️ / canards 🦆) | `E` |
+| Interagir (café ☕ / hot-dog 🌭 / haltères 🏋️ / vélo 🚴 / canards 🦆) | `E` |
 | Régler le rayon de proximité | `[` (réduire) / `]` (agrandir) |
 | Afficher/masquer sa bulle de proximité | `P` |
 
