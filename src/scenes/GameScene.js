@@ -264,7 +264,9 @@ export default class GameScene extends Phaser.Scene {
       k = key(cur.c, cur.r);
     }
     const pts = cells.map((cc) => ({ x: cc.c * n.cell + n.cell / 2, y: cc.r * n.cell + n.cell / 2 }));
-    pts.push({ x: tx, y: ty }); // point exact visé en bout de course
+    // Point exact visé seulement s'il est libre ; sinon on s'arrête à la
+    // dernière case libre (clic sur un meuble = on s'approche, sans s'y coincer).
+    if (!this.pointBlocked(tx, ty)) pts.push({ x: tx, y: ty });
 
     // Lissage par ligne de vue (string-pulling)
     const start = { x: sx, y: sy };
@@ -479,26 +481,30 @@ export default class GameScene extends Phaser.Scene {
     };
 
     // ---- Open-space : deux rangées de bureaux avec écran, clavier, chaise ----
+    // Bureaux 110×54, espacés (180 px → ~70 px de couloir entre eux, ~76 px
+    // entre les rangées) pour laisser passer un avatar de 32 px + sa marge.
+    const DESK_W = 110;
+    const DESK_H = 54;
     [
-      { y: 440, chairY: 396 },
-      { y: 570, chairY: 614 },
+      { y: 432, chairY: 392 },
+      { y: 562, chairY: 602 },
     ].forEach((row) => {
-      [620, 790, 960].forEach((x) => {
-        shadow(x, row.y + 30, 140, 20);
+      [630, 810, 990].forEach((x) => {
+        shadow(x, row.y + 28, 118, 18);
         g.fillStyle(0x7a5c42, 1);
-        g.fillRoundedRect(x - 65, row.y - 30, 130, 60, 10);
+        g.fillRoundedRect(x - DESK_W / 2, row.y - DESK_H / 2, DESK_W, DESK_H, 10);
         g.fillStyle(0x8d6c4e, 1);
-        g.fillRoundedRect(x - 58, row.y - 26, 116, 46, 8);
+        g.fillRoundedRect(x - DESK_W / 2 + 6, row.y - DESK_H / 2 + 4, DESK_W - 12, DESK_H - 14, 8);
         top.fillStyle(0x10161d, 1); // écran
-        top.fillRoundedRect(x - 17, row.y - 24, 34, 20, 3);
+        top.fillRoundedRect(x - 17, row.y - 22, 34, 20, 3);
         top.fillStyle(0x3d5a80, 0.9);
-        top.fillRect(x - 13, row.y - 20, 26, 12);
+        top.fillRect(x - 13, row.y - 18, 26, 12);
         top.fillStyle(0x10161d, 1); // pied
-        top.fillRect(x - 3, row.y - 4, 6, 3);
+        top.fillRect(x - 3, row.y - 2, 6, 3);
         top.fillStyle(0x232f3c, 1); // clavier
-        top.fillRoundedRect(x - 15, row.y + 4, 30, 9, 2);
+        top.fillRoundedRect(x - 15, row.y + 5, 30, 9, 2);
         this.drawChair(sh, g, x, row.chairY);
-        this.addBlocker(x, row.y, 130, 60);
+        this.addBlocker(x, row.y, DESK_W, DESK_H);
       });
     });
 
@@ -662,29 +668,39 @@ export default class GameScene extends Phaser.Scene {
       [520, 330], [520, 505], [1055, 505],
     ].forEach(([x, y]) => this.drawPlant(sh, g, top, x, y));
 
-    // ---- Coin haltères (E pour soulever… et bomber les biceps) ----
+    // ---- Coin haltères, adossé au mur du bas (E pour soulever) ----
     const gx = this.GYM.x;
     const gy = this.GYM.y;
-    top.fillStyle(0x232c38, 1); // tapis de sol
-    top.fillRoundedRect(gx - 46, gy + 8, 92, 34, 8);
+    const wallY = WORLD.height - WALL; // bord intérieur du mur du bas (≈ 976)
+    // Tapis de sol devant le rack
+    top.fillStyle(0x232c38, 1);
+    top.fillRoundedRect(gx - 70, gy - 18, 140, 56, 10);
     top.lineStyle(2, 0x3a4658, 0.8);
-    top.strokeRoundedRect(gx - 46, gy + 8, 92, 34, 8);
+    top.strokeRoundedRect(gx - 70, gy - 18, 140, 56, 10);
+    // Rack mural (support sombre contre le mur) avec deux barres
+    const rackY = wallY - 26;
+    sh.fillStyle(0x000000, 0.25);
+    sh.fillEllipse(gx, rackY + 26, 150, 14);
+    g.fillStyle(0x222a33, 1);
+    g.fillRoundedRect(gx - 74, rackY, 148, 24, 6);
+    g.fillStyle(0x2c3a4a, 1);
+    g.fillRect(gx - 70, rackY + 5, 140, 5); // étagère haute
+    g.fillRect(gx - 70, rackY + 15, 140, 5); // étagère basse
     const drawDumbbell = (dx, dy) => {
-      sh.fillStyle(0x000000, 0.22);
-      sh.fillEllipse(dx, dy + 7, 34, 8);
-      g.fillStyle(0x2c3a4a, 1); // barre
-      g.fillRoundedRect(dx - 15, dy - 3, 30, 6, 2);
-      g.fillStyle(0x44586e, 1); // poids
-      g.fillCircle(dx - 16, dy, 8);
-      g.fillCircle(dx + 16, dy, 8);
-      g.fillStyle(0x55698a, 1);
-      g.fillCircle(dx - 16, dy, 4);
-      g.fillCircle(dx + 16, dy, 4);
+      g.fillStyle(0x394a5e, 1); // barre
+      g.fillRoundedRect(dx - 16, dy - 2.5, 32, 5, 2);
+      g.fillStyle(0x556a86, 1); // poids
+      g.fillCircle(dx - 17, dy, 7);
+      g.fillCircle(dx + 17, dy, 7);
+      g.fillStyle(0x6b82a3, 1);
+      g.fillCircle(dx - 17, dy, 3.5);
+      g.fillCircle(dx + 17, dy, 3.5);
     };
-    drawDumbbell(gx - 18, gy + 22);
-    drawDumbbell(gx + 20, gy + 26);
-    this.addEmoji(gx, gy - 2, '🏋️', 22, 2);
-    this.addBlocker(gx, gy + 25, 92, 26);
+    drawDumbbell(gx - 34, rackY + 7);
+    drawDumbbell(gx + 32, rackY + 7);
+    drawDumbbell(gx - 2, rackY + 17);
+    this.addEmoji(gx + 56, rackY + 4, '🏋️', 22, 2);
+    this.addBlocker(gx, rackY + 12, 148, 24);
 
     // ---- Petites touches drôles ----
     this.addEmoji(1000, 945, '🚧', 22, 1);
@@ -705,12 +721,6 @@ export default class GameScene extends Phaser.Scene {
 
     // Corps animable (rebond / respiration)
     const bodyG = this.add.container(0, 0);
-
-    // Bras musclés (cachés par défaut, ajoutés sous le disque pour ne dépasser
-    // qu'à l'extérieur). Apparaissent quand on soulève des haltères.
-    const armL = this.makeArm(-1);
-    const armR = this.makeArm(1);
-
     const disc = this.add.circle(0, 0, r, color);
     disc.setStrokeStyle(3, 0xffffff, 0.9);
     const highlight = this.add.ellipse(0, -r * 0.4, r * 1.1, r * 0.85, 0xffffff, 0.16);
@@ -723,8 +733,13 @@ export default class GameScene extends Phaser.Scene {
     const pupR = this.add.circle(5, -1, 1.5, 0x12202c);
     faceG.add([eyeL, eyeR, pupL, pupR]);
 
-    bodyG.add([armL, armR, disc, highlight, faceG]);
+    bodyG.add([disc, highlight, faceG]);
     this.addHat(bodyG, faceG, opts.hat);
+
+    // Bras musclés au-dessus (cachés par défaut) — pose double-biceps.
+    const armL = this.makeArm(-1);
+    const armR = this.makeArm(1);
+    bodyG.add([armL, armR]);
 
     const label = this.add
       .text(0, r + 12, name, {
@@ -749,16 +764,23 @@ export default class GameScene extends Phaser.Scene {
     return container;
   }
 
-  // Un bras musclé (épaule + gros biceps + poing), masqué tant qu'on ne
-  // soulève pas de fonte. `side` = -1 (gauche) ou +1 (droite).
+  // Un bras musclé en pose « flex » (gros biceps bombé + avant-bras + poing
+  // levé), bien contrasté. `side` = -1 (gauche) ou +1 (droite).
+  // Masqué tant qu'on ne soulève pas de fonte.
   makeArm(side) {
     const r = PLAYER.radius;
-    const arm = this.add.container(side * (r - 1), 4);
-    const shoulder = this.add.ellipse(0, 6, 9, 13, 0xdca579);
-    const bicep = this.add.ellipse(side * 5, -3, 15, 14, 0xe8b88c);
-    bicep.setStrokeStyle(2, 0xc98f63, 0.7);
-    const fist = this.add.circle(side * 8, -11, 5, 0xdca579);
-    arm.add([shoulder, bicep, fist]);
+    const skin = 0xf3c79c;
+    const line = 0x9c6638;
+    const arm = this.add.container(side * (r - 3), 1);
+    // avant-bras qui remonte vers la tête
+    const forearm = this.add.ellipse(side * 15, -12, 12, 17, skin).setStrokeStyle(3, line);
+    // poing levé
+    const fist = this.add.circle(side * 17, -21, 6.5, skin).setStrokeStyle(3, line);
+    // gros biceps bombé
+    const bicep = this.add.ellipse(side * 8, 1, 22, 20, skin).setStrokeStyle(3, line);
+    // reflet de muscle
+    const shine = this.add.ellipse(side * 4, -4, 9, 7, 0xffffff, 0.3);
+    arm.add([forearm, fist, bicep, shine]);
     arm.setVisible(false);
     arm.setData('bicep', bicep);
     return arm;
@@ -885,14 +907,14 @@ export default class GameScene extends Phaser.Scene {
     bodyG.angle = 0;
     bodyG.setScale(girth, girth);
 
-    // Haltères : on bombe les biceps en rythme + petite poussée du corps.
+    // Haltères : tout le bras pompe en rythme + petite poussée du corps.
     if (flexing) {
-      const pump = 1 + Math.abs(Math.sin(t * 12 + phase)) * 0.4;
+      const pump = 1 + Math.abs(Math.sin(t * 11 + phase)) * 0.22;
       arms.forEach((a) => {
-        a.getData('bicep').setScale(pump, pump);
-        a.y = 4 - (pump - 1) * 10;
+        a.setScale(pump);
+        a.y = 1 - (pump - 1) * 18;
       });
-      bodyG.y = -Math.abs(Math.sin(t * 12 + phase)) * 2.5;
+      bodyG.y = -Math.abs(Math.sin(t * 11 + phase)) * 2.5;
       shadow.setScale(girth, girth);
       return;
     }
@@ -1048,7 +1070,7 @@ export default class GameScene extends Phaser.Scene {
   COFFEE = { x: 1239, y: 783, range: 90 };
   POND = { x: 250, y: 800, feedRange: 200 };
   HOTDOG = { x: 980, y: 860, range: 95 };
-  GYM = { x: 480, y: 745, range: 90 };
+  GYM = { x: 700, y: 912, range: 95 };
 
   // Salles de réunion privées : tous ceux à l'intérieur d'une même salle sont
   // en conversation entre eux, et isolés du reste de l'espace.
