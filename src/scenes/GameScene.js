@@ -715,6 +715,52 @@ export default class GameScene extends Phaser.Scene {
       [520, 330], [520, 505], [1055, 505],
     ].forEach(([x, y]) => this.drawPlant(sh, g, top, x, y));
 
+    // ---- Estrade d'annonce (on monte dessus, pas de blocage) ----
+    const px = this.PODIUM.x;
+    const py = this.PODIUM.y;
+    sh.fillStyle(0x000000, 0.28);
+    sh.fillEllipse(px, py + 8, this.PODIUM.r * 2.3, this.PODIUM.r * 0.9);
+    g.fillStyle(0x7a2f35, 1); // scène bordeaux
+    g.fillCircle(px, py, this.PODIUM.r);
+    g.fillStyle(0x93404a, 1);
+    g.fillCircle(px, py, this.PODIUM.r - 8);
+    g.lineStyle(3, 0xf2c14e, 0.9); // liseré doré
+    g.strokeCircle(px, py, this.PODIUM.r);
+    // spots sur le pourtour
+    for (let a = 0; a < 6; a++) {
+      const ang = (a / 6) * Math.PI * 2;
+      top.fillStyle(0xf2c14e, 0.9);
+      top.fillCircle(px + Math.cos(ang) * (this.PODIUM.r - 4), py + Math.sin(ang) * (this.PODIUM.r - 4), 2.5);
+    }
+    // petite marche
+    g.fillStyle(0x5d2a30, 1);
+    g.fillRoundedRect(px - 16, py + this.PODIUM.r - 4, 32, 12, 4);
+    this.addEmoji(px, py - this.PODIUM.r - 12, '📢', 20, 1);
+
+    // ---- Machine à bonbons (zone détente, contre le mur du haut) ----
+    const cx = this.CANDY.x;
+    const cy = this.CANDY.y;
+    sh.fillStyle(0x000000, 0.25);
+    sh.fillEllipse(cx, cy + 26, 40, 10);
+    g.fillStyle(0xc4453a, 1); // socle rouge
+    g.fillRoundedRect(cx - 15, cy + 2, 30, 22, 5);
+    g.fillStyle(0x8a2b22, 1); // trappe
+    g.fillRoundedRect(cx - 6, cy + 12, 12, 8, 2);
+    g.fillStyle(0xdbe9f2, 0.95); // globe en verre
+    g.fillCircle(cx, cy - 10, 15);
+    // bonbons dans le globe
+    [
+      [-6, -14, 0xe06b8f], [3, -17, 0x5b8def], [7, -9, 0xf2c14e],
+      [-2, -7, 0x36c98f], [-8, -6, 0xb06bd6], [4, -3, 0xf08a4b],
+    ].forEach(([dx, dy, c]) => {
+      top.fillStyle(c, 1);
+      top.fillCircle(cx + dx, cy + dy, 3.4);
+    });
+    top.lineStyle(2, 0xffffff, 0.5); // reflet du verre
+    top.strokeCircle(cx, cy - 10, 15);
+    this.addEmoji(cx + 28, cy - 6, '🍬', 16, 1);
+    this.addBlocker(cx, cy, 36, 40);
+
     // ---- Salle Sport : vélo d'appartement (E pour pédaler = boost) ----
     const bx = this.BIKE.x;
     const by = this.BIKE.y;
@@ -833,6 +879,7 @@ export default class GameScene extends Phaser.Scene {
 
     container.add([shadow, wheels, bodyG, label]);
     container.setData('circle', disc);
+    container.setData('baseColor', color);
     container.setData('bodyG', bodyG);
     container.setData('faceG', faceG);
     container.setData('shadow', shadow);
@@ -998,6 +1045,19 @@ export default class GameScene extends Phaser.Scene {
       if (riding) wheels.each((wheel) => (wheel.angle += moving ? 14 : 4));
     }
 
+    // Bonbon : strobe multicolore + clignotement pendant 20 s, puis retour
+    // à la couleur d'origine.
+    const disc = container.getData('circle');
+    if ((container.getData('candyUntil') || 0) > time) {
+      const idx = Math.floor(t * 7 + phase) % AVATAR_COLORS.length;
+      disc.setFillStyle(AVATAR_COLORS[idx]);
+      disc.setAlpha(0.7 + 0.3 * Math.abs(Math.sin(t * 12 + phase)));
+    } else if (container.getData('candyActive')) {
+      container.setData('candyActive', false);
+      disc.setAlpha(1);
+      disc.setFillStyle(container.getData('baseColor') ?? disc.fillColor);
+    }
+
     // Nage : dans le bassin, petites ondulations autour de l'avatar.
     if (this.inPool(container.x, container.y)) {
       const lastRip = container.getData('ripAt') || 0;
@@ -1118,6 +1178,7 @@ export default class GameScene extends Phaser.Scene {
       this.player.setPosition(you.x, you.y);
       this.playerCircle.setFillStyle(you.color);
       this.myColor = you.color;
+      this.player.setData('baseColor', you.color);
       const pet = this.player.getData('petC');
       if (pet) {
         pet.x = you.x + 30;
@@ -1126,7 +1187,10 @@ export default class GameScene extends Phaser.Scene {
       players.forEach((p) => this.addRemote(p));
     });
 
-    this.socket.on('player-joined', (p) => this.addRemote(p));
+    this.socket.on('player-joined', (p) => {
+      this.addRemote(p);
+      this.notifyArrival(p.pseudo);
+    });
 
     this.socket.on('player-moved', ({ id, x, y, dir }) => {
       const o = this.others.get(id);
@@ -1188,6 +1252,33 @@ export default class GameScene extends Phaser.Scene {
       const o = this.others.get(id);
       if (o) this.applyBike(o.container);
     });
+
+    // Quelqu'un croque un bonbon : strobe multicolore chez nous aussi.
+    this.socket.on('candy', ({ id }) => {
+      const o = this.others.get(id);
+      if (o) this.applyCandy(o.container);
+    });
+  }
+
+  // Fait clignoter le titre de l'onglet quand quelqu'un arrive et que la
+  // fenêtre n'est pas au premier plan ; s'arrête au retour sur l'onglet.
+  notifyArrival(name) {
+    if (!document.hidden) return;
+    const original = this._origTitle || document.title;
+    this._origTitle = original;
+    clearInterval(this._titleBlink);
+    let on = false;
+    this._titleBlink = setInterval(() => {
+      on = !on;
+      document.title = on ? `👋 ${name} vient d'arriver !` : original;
+    }, 900);
+    const stop = () => {
+      if (document.hidden) return;
+      clearInterval(this._titleBlink);
+      document.title = original;
+      document.removeEventListener('visibilitychange', stop);
+    };
+    document.addEventListener('visibilitychange', stop);
   }
 
   // Lance la danse d'un avatar (~2,6 s) ; l'animation est jouée dans
@@ -1206,6 +1297,14 @@ export default class GameScene extends Phaser.Scene {
   BIKE = { x: 880, y: 272, range: 80 };
   // Bassin du couloir de nage (non bloquant : on y nage, ralenti)
   POOL = { x1: 635, y1: 70, x2: 945, y2: 190 };
+  // Estrade d'annonce : qui monte dessus est entendu par tout l'espace.
+  PODIUM = { x: 490, y: 770, r: 45 };
+  // Machine à bonbons (zone détente, contre le mur du haut)
+  CANDY = { x: 300, y: 85, range: 80 };
+
+  onPodium(x, y) {
+    return Phaser.Math.Distance.Between(x, y, this.PODIUM.x, this.PODIUM.y) < this.PODIUM.r;
+  }
 
   // Salles de réunion privées : tous ceux à l'intérieur d'une même salle sont
   // en conversation entre eux, et isolés du reste de l'espace.
@@ -1258,13 +1357,35 @@ export default class GameScene extends Phaser.Scene {
     );
   }
 
+  nearCandy() {
+    return (
+      Phaser.Math.Distance.Between(this.player.x, this.player.y, this.CANDY.x, this.CANDY.y) <
+      this.CANDY.range
+    );
+  }
+
   tryInteract() {
     if (this.typing) return;
     if (this.nearCoffee()) this.drinkCoffee();
     else if (this.nearBike()) this.rideBike();
     else if (this.nearGym()) this.liftWeights();
+    else if (this.nearCandy()) this.eatCandy();
     else if (this.nearHotdog()) this.eatHotdog();
     else if (this.nearPond()) this.tryFeed();
+  }
+
+  // ----- Bonbons : l'avatar clignote de toutes les couleurs 20 s -----
+
+  eatCandy() {
+    if ((this.player.getData('candyUntil') || 0) > this.time.now) return; // déjà sous sucre
+    this.applyCandy(this.player);
+    this.socket?.emit('candy');
+  }
+
+  applyCandy(container) {
+    container.setData('candyUntil', this.time.now + 20000);
+    container.setData('candyActive', true);
+    this.spawnEmote(container, '🍬');
   }
 
   // ----- Vélo : boost de vitesse, roues sous l'avatar -----
@@ -1768,6 +1889,8 @@ export default class GameScene extends Phaser.Scene {
     else if (this.nearBike() && (this.player.getData('bikeUntil') || 0) <= this.time.now)
       text = '🚴 E : pédaler (boost de vitesse)';
     else if (this.nearGym() && this.time.now >= this.flexCooldown) text = '🏋️ E : soulever des haltères';
+    else if (this.nearCandy() && (this.player.getData('candyUntil') || 0) <= this.time.now)
+      text = '🍬 E : prendre un bonbon';
     else if (this.nearHotdog() && this.time.now >= this.eatCooldown) text = '🌭 E : manger un hot-dog';
     else if (this.nearPond() && this.time.now >= this.feedCooldown) text = '🦆 E : nourrir les canards';
     if (text) {
@@ -1895,6 +2018,8 @@ export default class GameScene extends Phaser.Scene {
     const py = this.player.y;
     const r = this.proximityRadius;
     const myRoom = this.roomAt(px, py);
+    const myPod = this.onPodium(px, py);
+    let podOccupied = myPod;
 
     if (this.showBubble && !myRoom) {
       this.fx.lineStyle(2, COLORS.bubble, 0.35);
@@ -1905,11 +2030,19 @@ export default class GameScene extends Phaser.Scene {
     this.others.forEach((o) => {
       const bx = o.container.x;
       const by = o.container.y;
-      // Salles privées : en conversation si on est dans la MÊME salle (quelle
-      // que soit la distance) ; sinon, isolés dès que l'un des deux est en salle.
+      // Estrade : qui est dessus est en conversation avec TOUT le monde
+      // (les annonces percent même les salles privées). Sinon, salles
+      // privées : même salle = connectés ; l'un en salle = isolés ;
+      // sinon règle de distance.
+      const oPod = this.onPodium(bx, by);
+      if (oPod) podOccupied = true;
       const oRoom = this.roomAt(bx, by);
       const inRange =
-        myRoom || oRoom ? myRoom === oRoom : Phaser.Math.Distance.Between(px, py, bx, by) <= r;
+        myPod || oPod
+          ? true
+          : myRoom || oRoom
+            ? myRoom === oRoom
+            : Phaser.Math.Distance.Between(px, py, bx, by) <= r;
 
       if (inRange) {
         this.nearby.push(o.name);
@@ -1924,6 +2057,13 @@ export default class GameScene extends Phaser.Scene {
       if (inRange && !o.inRange) this.onEnterRange(o);
       else if (!inRange && o.inRange) this.onLeaveRange(o);
     });
+
+    // Estrade occupée : anneau doré pulsant, visible de loin.
+    if (podOccupied) {
+      const pulse = 0.5 + 0.35 * Math.sin(this.time.now / 180);
+      this.fx.lineStyle(4, COLORS.botActive, pulse);
+      this.fx.strokeCircle(this.PODIUM.x, this.PODIUM.y, this.PODIUM.r + 8);
+    }
   }
 
   onEnterRange(o) {
@@ -1961,7 +2101,10 @@ export default class GameScene extends Phaser.Scene {
 
     this.status.setY(this.scale.height - 44);
     const room = this.roomAt(this.player.x, this.player.y);
-    if (room) {
+    if (this.onPodium(this.player.x, this.player.y)) {
+      this.status.setColor('#f2c14e');
+      this.status.setText('📢 Sur l\'estrade — tout l\'espace t\'entend !');
+    } else if (room) {
       this.status.setColor('#9bb8e8');
       this.status.setText(
         this.nearby.length

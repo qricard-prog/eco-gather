@@ -64,6 +64,20 @@ En haut au centre : une 4ᵉ salle privée avec :
   des petites roues qui tournent sous l'avatar 🚴 (visible par tous, cumulable
   avec le café ☕).
 
+### Estrade d'annonce 📢
+Une scène circulaire (près de l'étang) : monte dessus et **tout l'espace
+t'entend**, y compris les salles privées (effet sono d'annonce). Anneau doré
+pulsant quand elle est occupée, statut dédié en bas d'écran.
+
+### Machine à bonbons 🍬
+En zone détente : `E` → ton avatar **clignote de toutes les couleurs pendant
+20 s** (strobe multicolore + battement d'opacité), puis retrouve sa couleur.
+Visible par tout le monde.
+
+### Notification d'arrivée 👋
+Si l'onglet est en arrière-plan quand quelqu'un rejoint l'espace, le **titre de
+l'onglet clignote** « 👋 X vient d'arriver ! » jusqu'à ton retour.
+
 ### Coin haltères 🏋️
 À gauche de l'open-space : `E` → ton avatar sort les **gros biceps** qui pompent
 quelques secondes (💪). Visible par tout le monde aussi.

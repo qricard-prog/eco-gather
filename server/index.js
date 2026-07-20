@@ -182,6 +182,11 @@ io.on('connection', (socket) => {
     if (players.has(socket.id)) socket.broadcast.emit('bike', { id: socket.id });
   });
 
+  // Bonbon : le strobe multicolore est visible chez tout le monde.
+  socket.on('candy', () => {
+    if (players.has(socket.id)) socket.broadcast.emit('candy', { id: socket.id });
+  });
+
   socket.on('disconnect', () => {
     const p = players.get(socket.id);
     players.delete(socket.id);
